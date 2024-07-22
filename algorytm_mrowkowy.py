@@ -136,7 +136,7 @@ def fitness(route, items):
     distance = 0
     for i in range(len(route) - 1):
         if not any(dest == route[i + 1] for dest, dist in graph[route[i]]):
-            return 0  # Invalid route, return 0 fitness
+            return 0  # Jesli niepoprawna trasa zwroc 0
         for dest, dist in graph[route[i]]:
             if dest == route[i + 1]:
                 distance += dist
@@ -159,7 +159,7 @@ def solve_knapsack(route):
                 break
 
     if distances[-1] == 0:
-        distances[-1] = 1  # Avoid division by zero
+        distances[-1] = 1  # Dzielenie przez 0
 
     finalitemset = []
     time = distances[-1] * 2 * (Vmax + Vmin)
@@ -169,7 +169,7 @@ def solve_knapsack(route):
             if city in route:
                 route_index = route.index(city)
                 if distances[route_index] == 0:
-                    distances[route_index] = 1  # Avoid division by zero
+                    distances[route_index] = 1  # Dzielenie przez 0
                 score = int(value[0] - (0.25 * value[0] * (distances[route_index] / distances[-1])) - (R * time * value[1] / W))
                 finalitemset.append([key, city, value[1], score, value[0]])
 
@@ -220,7 +220,8 @@ def calculate_total_distance(route):
                 break
     return total_distance
 
-# Parametry ACO
+# Parametry
+
 num_ants = 20
 num_iterations = 100
 alpha = 1.0
@@ -230,7 +231,6 @@ pheromone_deposit = 100
 
 # Testowanie algorytmów
 
-# ACO
 print("Uruchamianie algorytmu ACO...")
 aco = ACO(num_ants, num_iterations, alpha, beta, evaporation_rate, pheromone_deposit)
 best_route_aco, best_distance_aco = aco.run(graph, len(graph))
