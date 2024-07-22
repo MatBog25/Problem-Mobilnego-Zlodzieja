@@ -50,7 +50,7 @@ def fitness(route, items):
     distance = 0
     for i in range(len(route) - 1):
         if not any(dest == route[i + 1] for dest, dist in graph[route[i]]):
-            return 0  # Invalid route, return 0 fitness
+            return 0  # Jesli niepoprawna trasa zwroc 0
         for dest, dist in graph[route[i]]:
             if dest == route[i + 1]:
                 distance += dist
@@ -73,7 +73,7 @@ def solve_knapsack(route):
                 break
 
     if distances[-1] == 0:
-        distances[-1] = 1  # Avoid division by zero
+        distances[-1] = 1  # Dzielenie przez 0
 
     finalitemset = []
     time = distances[-1] * 2 * (Vmax + Vmin)
@@ -83,7 +83,7 @@ def solve_knapsack(route):
             if city in route:
                 route_index = route.index(city)
                 if distances[route_index] == 0:
-                    distances[route_index] = 1  # Avoid division by zero
+                    distances[route_index] = 1  # Dzielenie przez 0
                 score = int(value[0] - (0.25 * value[0] * (distances[route_index] / distances[-1])) - (R * time * value[1] / W))
                 finalitemset += [[key, city, value[1], score, value[0]]]
 
@@ -110,30 +110,6 @@ def solve_knapsack(route):
     fin.sort(key=lambda x: x[0])
 
     return fin, totalprof, wc
-
-class GreedyAlgorithm:
-    def __init__(self):
-        self.visited = [0] * len(graph)
-        self.shortest_path = []
-        self.path_length = 0
-
-    def path(self, i):
-        self.shortest_path += [i]
-        self.visited[i - 1] = 1
-        min_distance = float("inf")
-        next_city = None
-        for edge in graph[i]:
-            if self.visited[edge[0] - 1] == 0 and edge[1] < min_distance:
-                min_distance = edge[1]
-                next_city = edge[0]
-        if next_city:
-            self.path_length += min_distance
-            self.path(next_city)
-
-    def run(self):
-        self.path(1)  # Start from city 1
-        return self.shortest_path, self.path_length
-
 
 class RandomSearch:
     def __init__(self, iterations):
@@ -187,26 +163,10 @@ def calculate_total_distance(route):
 
 # Parametry optymalizacji
 
-# Greedy Algorithm
-# - brak dodatkowych parametrów
+rs_iterations = 100
 
-# Simulated Annealing
-initial_temperature = 1000
-cooling_rate = 0.99
+# Testowanie algorytmu
 
-# Random Search
-rs_iterations = 1000
-
-# Testowanie algorytmów
-
-# Greedy Algorithm
-print("Uruchamianie algorytmu zachłannego...")
-greedy = GreedyAlgorithm()
-best_route_greedy, total_distance_greedy = greedy.run()
-picked_items_greedy, total_profit_greedy, total_weight_greedy = solve_knapsack(best_route_greedy)
-print_solution(best_route_greedy, total_distance_greedy, picked_items_greedy, total_profit_greedy, total_weight_greedy)
-
-# Random Search
 print("\nUruchamianie algorytmu losowego przeszukiwania...")
 rs = RandomSearch(iterations=rs_iterations)
 best_route_rs, best_fitness_rs = rs.run()
