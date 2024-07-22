@@ -75,7 +75,7 @@ def fitness(route, items):
     distance = 0
     for i in range(len(route) - 1):
         if not any(dest == route[i + 1] for dest, dist in graph[route[i]]):
-            return 0  # Invalid route, return 0 fitness
+            return 0  # Jesli niepoprawna trasa zwroc 0
         for dest, dist in graph[route[i]]:
             if dest == route[i + 1]:
                 distance += dist
@@ -98,7 +98,7 @@ def solve_knapsack(route):
                 break
 
     if distances[-1] == 0:
-        distances[-1] = 1  # Avoid division by zero
+        distances[-1] = 1  # Dzielenie przez 0
 
     finalitemset = []
     time = distances[-1] * 2 * (Vmax + Vmin)
@@ -108,7 +108,7 @@ def solve_knapsack(route):
             if city in route:
                 route_index = route.index(city)
                 if distances[route_index] == 0:
-                    distances[route_index] = 1  # Avoid division by zero
+                    distances[route_index] = 1  # Dzielenie przez 0
                 score = int(value[0] - (0.25 * value[0] * (distances[route_index] / distances[-1])) - (R * time * value[1] / W))
                 finalitemset.append([key, city, value[1], score, value[0]])
 
@@ -199,16 +199,15 @@ def calculate_total_distance(route):
                 break
     return total_distance
 
-# Parametry PSO
+# Parametry
 num_particles = 30
 w = 0.5
 c1 = 1.5
 c2 = 1.5
 num_iterations = 1000
 
-# Testowanie algorytmów
+# Testowanie algorytmu
 
-# PSO
 print("Uruchamianie algorytmu PSO...")
 pso = PSO(num_particles, w, c1, c2, num_iterations)
 best_route_pso, best_fitness_pso = pso.run()
