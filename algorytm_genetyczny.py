@@ -44,7 +44,7 @@ def fitness(route, items):
     distance = 0
     for i in range(len(route) - 1):
         if not any(dest == route[i + 1] for dest, dist in graph[route[i]]):
-            return 0  # Invalid route, return 0 fitness
+            return 0  # kiedy zla trasa
         for dest, dist in graph[route[i]]:
             if dest == route[i + 1]:
                 distance += dist
@@ -67,7 +67,7 @@ def solve_knapsack(route):
                 break
 
     if distances[-1] == 0:
-        distances[-1] = 1  # Avoid division by zero
+        distances[-1] = 1  # Dzielenie przez 0
 
     finalitemset = []
     time = distances[-1] * 2 * (Vmax + Vmin)
@@ -77,7 +77,7 @@ def solve_knapsack(route):
             if city in route:
                 route_index = route.index(city)
                 if distances[route_index] == 0:
-                    distances[route_index] = 1  # Avoid division by zero
+                    distances[route_index] = 1  # Dzielenie przez 0
                 score = int(value[0] - (0.25 * value[0] * (distances[route_index] / distances[-1])) - (R * time * value[1] / W))
                 finalitemset.append([key, city, value[1], score, value[0]])
 
@@ -219,7 +219,6 @@ num_generations = 100
 
 # Testowanie algorytmów
 
-# GA
 print("Uruchamianie algorytmu GA...")
 ga = GeneticAlgorithm(population_size, mutation_rate, crossover_rate, num_generations)
 best_route_ga, best_fitness_ga = ga.run()
