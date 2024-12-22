@@ -1,56 +1,20 @@
 import random
-import math
-from numpy.random import randint, rand
+from data_loader import load_data  # Wcześniej zaimplementowana funkcja
 
-# Definicje grafu i zestawu przedmiotów
-graph = {
-    1: [(2, 200), (3, 245), (16, 225)], # Białystok
-    2: [(1, 200), (3, 175), (5, 178), (10, 136), (14, 272), (16, 216)], # Warszawa
-    3: [(1, 245), (2, 175), (4, 178)],  # Lublin
-    4: [(3, 178), (5, 157), (6, 167)],  # Rzeszów
-    5: [(2, 178), (4, 157), (6, 167), (10, 154)], # Kielce
-    6: [(4, 167), (5, 167), (7, 81)], # Kraków
-    7: [(6, 81), (8, 117), (10, 205)], # Katowice 
-    8: [(7, 117), (9, 98), (10, 222)], # Opole
-    9: [(8, 98), (10, 222), (11, 184), (12, 187)], # Wrocław
-    10: [(2, 136), (5, 154), (7, 205), (8, 222), (9, 222), (11, 216), (14, 217)],  # Łódź
-    11: [(9, 184), (10, 216), (12, 153), (13, 266), (14, 138)],  # Poznań
-    12: [(9, 187), (11, 153), (13, 213)], # Zielona Góra
-    13: [(11, 266), (12, 213), (14, 259), (15, 376)], # Szczecin
-    14: [(2, 272), (10, 217), (11, 138), (13, 259), (15, 167), (16, 212)], # Bydgoszcz
-    15: [(13, 376), (14, 167), (16, 182)], # Gdańsk
-    16: [(1, 225), (2, 216), (14, 212), (15, 182)], # Olsztyn
-}
+# Wczytaj dane z pliku
+graph, itemset, knapsack_capacity, min_speed, max_speed, renting_ratio = load_data("280_1.txt")
 
-itemset = {
-    1: [300, 50, (2, 6, 9, 10, 13)],  # wartość 300, waga 50, miasta: Warszawa, Kraków, Wrocław, Łódź, Szczecin
-    2: [600, 25, (2, 6, 10)],         # wartość 600, waga 25, miasta: Warszawa, Kraków, Łódź
-    3: [200, 100, (1, 11, 14, 16)],   # wartość 200, waga 100, miasta: Białystok, Poznań, Bydgoszcz, Olsztyn
-    4: [100, 10, (3, 4, 12, 16)],     # wartość 100, waga 10, miasta: Lublin, Rzeszów, Zielona Góra, Olsztyn
-    5: [250, 75, (5, 7, 8)],          # wartość 250, waga 75, miasta: Kielce, Katowice, Opole
-    6: [350, 60, (2, 6, 11, 14)],     # wartość 350, waga 60, miasta: Warszawa, Kraków, Poznań, Bydgoszcz
-    7: [150, 20, (4, 7, 8, 16)],      # wartość 150, waga 20, miasta: Rzeszów, Katowice, Opole, Olsztyn
-    8: [500, 30, (2, 6, 10, 15)],     # wartość 500, waga 30, miasta: Warszawa, Kraków, Łódź, Gdańsk
-    9: [120, 15, (3, 5, 12, 16)],     # wartość 120, waga 15, miasta: Lublin, Kielce, Zielona Góra, Olsztyn
-    10: [180, 40, (1, 3, 11, 13)],    # wartość 180, waga 40, miasta: Białystok, Lublin, Poznań, Szczecin
-    11: [270, 55, (6, 9, 14, 15)],    # wartość 270, waga 55, miasta: Kraków, Wrocław, Bydgoszcz, Gdańsk
-}
-Vmax = 15
-Vmin = 5
-R = 0.1
-W = 500
-
-class Solution:
-    def __init__(self, route, items):
-        self.route = route
-        self.items = items
-        self.fitness = 0
+# Parametry problemu
+Vmax = max_speed
+Vmin = min_speed
+W = knapsack_capacity
+R = renting_ratio
 
 def fitness(route, items):
     distance = 0
     for i in range(len(route) - 1):
         if not any(dest == route[i + 1] for dest, dist in graph[route[i]]):
-            return 0  # Jesli niepoprawna trasa zwroc 0
+            return 0  # Niepoprawna trasa
         for dest, dist in graph[route[i]]:
             if dest == route[i + 1]:
                 distance += dist
@@ -65,6 +29,7 @@ def fitness(route, items):
     return total_value - R * time
 
 def solve_knapsack(route):
+    """Rozwiązuje problem plecakowy dla podanej trasy."""
     distances = [0] * len(route)
     for i in range(1, len(route)):
         for dest, dist in graph[route[i - 1]]:
@@ -73,22 +38,23 @@ def solve_knapsack(route):
                 break
 
     if distances[-1] == 0:
-        distances[-1] = 1  # Dzielenie przez 0
+        distances[-1] = 1  # Zapobieganie dzieleniu przez zero
 
     finalitemset = []
     time = distances[-1] * 2 * (Vmax + Vmin)
     
     for key, value in itemset.items():
-        for city in value[2]:
-            if city in route:
-                route_index = route.index(city)
-                if distances[route_index] == 0:
-                    distances[route_index] = 1  # Dzielenie przez 0
-                score = int(value[0] - (0.25 * value[0] * (distances[route_index] / distances[-1])) - (R * time * value[1] / W))
-                finalitemset += [[key, city, value[1], score, value[0]]]
+        for item in value:
+            item_id, profit, weight = item
+            for city in route:
+                if city == item_id:  # Sprawdzamy, czy miasto jest na trasie
+                    route_index = route.index(city)
+                    if distances[route_index] == 0:
+                        distances[route_index] = 1  # Zapobieganie dzieleniu przez zero
+                    score = int(profit - (0.25 * profit * (distances[route_index] / distances[-1])) - (R * time * weight / W))
+                    finalitemset.append([item_id, city, weight, score, profit])
 
-    finalitemset.sort(key=lambda x: int(x[3]))
-    finalitemset.reverse()
+    finalitemset.sort(key=lambda x: int(x[3]), reverse=True)
 
     wc = 0
     picked_items = []
@@ -116,19 +82,10 @@ class RandomSearch:
         self.iterations = iterations
 
     def generate_random_route(self):
-        while True:
-            route = [1]
-            visited = set(route)
-            while len(route) < len(graph):
-                current_city = route[-1]
-                neighbors = [dest for dest, dist in graph[current_city] if dest not in visited]
-                if not neighbors:
-                    break
-                next_city = random.choice(neighbors)
-                route.append(next_city)
-                visited.add(next_city)
-            if len(route) == len(graph):
-                return route
+        """Generuje losową trasę, która zawiera wszystkie miasta."""
+        cities = list(graph.keys())
+        random.shuffle(cities)
+        return cities
 
     def run(self):
         best_route = self.generate_random_route()
@@ -162,12 +119,10 @@ def calculate_total_distance(route):
     return total_distance
 
 # Parametry optymalizacji
+rs_iterations = 1000  # Dostosuj liczbę iteracji do wielkości problemu
 
-rs_iterations = 100
-
-# Testowanie algorytmu
-
-print("\nUruchamianie algorytmu losowego przeszukiwania...")
+# Testowanie algorytmu Random Search
+print("Uruchamianie algorytmu losowego przeszukiwania...")
 rs = RandomSearch(iterations=rs_iterations)
 best_route_rs, best_fitness_rs = rs.run()
 total_distance_rs = calculate_total_distance(best_route_rs)

@@ -1,51 +1,30 @@
 import random
 import math
+from data_loader import load_data  # Wcześniej zaimplementowana funkcja
 
-# Definicje grafu i zestawu przedmiotów
-graph = {
-    1: [(2, 200), (3, 245), (16, 225)], # Białystok
-    2: [(1, 200), (3, 175), (5, 178), (10, 136), (14, 272), (16, 216)], # Warszawa
-    3: [(1, 245), (2, 175), (4, 178)],  # Lublin
-    4: [(3, 178), (5, 157), (6, 167)],  # Rzeszów
-    5: [(2, 178), (4, 157), (6, 167), (10, 154)], # Kielce
-    6: [(4, 167), (5, 167), (7, 81)], # Kraków
-    7: [(6, 81), (8, 117), (10, 205)], # Katowice 
-    8: [(7, 117), (9, 98), (10, 222)], # Opole
-    9: [(8, 98), (10, 222), (11, 184), (12, 187)], # Wrocław
-    10: [(2, 136), (5, 154), (7, 205), (8, 222), (9, 222), (11, 216), (14, 217)],  # Łódź
-    11: [(9, 184), (10, 216), (12, 153), (13, 266), (14, 138)],  # Poznań
-    12: [(9, 187), (11, 153), (13, 213)], # Zielona Góra
-    13: [(11, 266), (12, 213), (14, 259), (15, 376)], # Szczecin
-    14: [(2, 272), (10, 217), (11, 138), (13, 259), (15, 167), (16, 212)], # Bydgoszcz
-    15: [(13, 376), (14, 167), (16, 182)], # Gdańsk
-    16: [(1, 225), (2, 216), (14, 212), (15, 182)], # Olsztyn
-}
+# Wczytaj dane z pliku
+graph, itemset, knapsack_capacity, min_speed, max_speed, renting_ratio = load_data("280_1.txt")
 
-itemset = {
-    1: [300, 50, (2, 6, 9, 10, 13)],  # wartość 300, waga 50, miasta: Warszawa, Kraków, Wrocław, Łódź, Szczecin
-    2: [600, 25, (2, 6, 10)],         # wartość 600, waga 25, miasta: Warszawa, Kraków, Łódź
-    3: [200, 100, (1, 11, 14, 16)],   # wartość 200, waga 100, miasta: Białystok, Poznań, Bydgoszcz, Olsztyn
-    4: [100, 10, (3, 4, 12, 16)],     # wartość 100, waga 10, miasta: Lublin, Rzeszów, Zielona Góra, Olsztyn
-    5: [250, 75, (5, 7, 8)],          # wartość 250, waga 75, miasta: Kielce, Katowice, Opole
-    6: [350, 60, (2, 6, 11, 14)],     # wartość 350, waga 60, miasta: Warszawa, Kraków, Poznań, Bydgoszcz
-    7: [150, 20, (4, 7, 8, 16)],      # wartość 150, waga 20, miasta: Rzeszów, Katowice, Opole, Olsztyn
-    8: [500, 30, (2, 6, 10, 15)],     # wartość 500, waga 30, miasta: Warszawa, Kraków, Łódź, Gdańsk
-    9: [120, 15, (3, 5, 12, 16)],     # wartość 120, waga 15, miasta: Lublin, Kielce, Zielona Góra, Olsztyn
-    10: [180, 40, (1, 3, 11, 13)],    # wartość 180, waga 40, miasta: Białystok, Lublin, Poznań, Szczecin
-    11: [270, 55, (6, 9, 14, 15)],    # wartość 270, waga 55, miasta: Kraków, Wrocław, Bydgoszcz, Gdańsk
-}
-
-Vmax = 15
-Vmin = 5
-R = 0.1
-W = 500
+# Parametry problemu
+Vmax = max_speed
+Vmin = min_speed
+W = knapsack_capacity
+R = renting_ratio
 
 class Particle:
     def __init__(self, route):
-        self.route = route
-        self.best_route = list(route)
-        self.best_fitness = fitness(route, [])
+        self.route = self.ensure_all_cities(route)
+        self.best_route = list(self.route)
+        self.best_fitness = fitness(self.route, [])
         self.velocity = []
+
+    def ensure_all_cities(self, route):
+        """Zapewnia, że trasa zawiera wszystkie miasta."""
+        all_cities = set(graph.keys())
+        missing_cities = list(all_cities - set(route))
+        route += missing_cities  # Dodaj brakujące miasta
+        random.shuffle(route)  # Losowo permutuj trasę
+        return route
 
     def update_velocity(self, global_best_route, w, c1, c2):
         self.velocity = []
@@ -64,8 +43,7 @@ class Particle:
                 i, j = move[1], move[2]
                 if i < len(new_route) and j < len(new_route):
                     new_route[i], new_route[j] = new_route[j], new_route[i]
-        if is_valid_route(new_route):
-            self.route = new_route
+        self.route = self.ensure_all_cities(new_route)  # Uzupełnij brakujące miasta
         new_fitness = fitness(self.route, [])
         if new_fitness > self.best_fitness:
             self.best_fitness = new_fitness
@@ -75,7 +53,7 @@ def fitness(route, items):
     distance = 0
     for i in range(len(route) - 1):
         if not any(dest == route[i + 1] for dest, dist in graph[route[i]]):
-            return 0  # Jesli niepoprawna trasa zwroc 0
+            return 0  # Niepoprawna trasa
         for dest, dist in graph[route[i]]:
             if dest == route[i + 1]:
                 distance += dist
@@ -90,6 +68,7 @@ def fitness(route, items):
     return total_value - R * time
 
 def solve_knapsack(route):
+    """Rozwiązuje problem plecakowy dla podanej trasy."""
     distances = [0] * len(route)
     for i in range(1, len(route)):
         for dest, dist in graph[route[i - 1]]:
@@ -98,19 +77,21 @@ def solve_knapsack(route):
                 break
 
     if distances[-1] == 0:
-        distances[-1] = 1  # Dzielenie przez 0
+        distances[-1] = 1  # Zapobieganie dzieleniu przez zero
 
     finalitemset = []
     time = distances[-1] * 2 * (Vmax + Vmin)
     
     for key, value in itemset.items():
-        for city in value[2]:
-            if city in route:
-                route_index = route.index(city)
-                if distances[route_index] == 0:
-                    distances[route_index] = 1  # Dzielenie przez 0
-                score = int(value[0] - (0.25 * value[0] * (distances[route_index] / distances[-1])) - (R * time * value[1] / W))
-                finalitemset.append([key, city, value[1], score, value[0]])
+        for item in value:
+            item_id, profit, weight = item
+            for city in route:
+                if city == item_id:  # Sprawdzamy, czy miasto jest na trasie
+                    route_index = route.index(city)
+                    if distances[route_index] == 0:
+                        distances[route_index] = 1  # Zapobieganie dzieleniu przez zero
+                    score = int(profit - (0.25 * profit * (distances[route_index] / distances[-1])) - (R * time * weight / W))
+                    finalitemset.append([item_id, city, weight, score, profit])
 
     finalitemset.sort(key=lambda x: int(x[3]), reverse=True)
 
@@ -135,12 +116,6 @@ def solve_knapsack(route):
 
     return fin, totalprof, wc
 
-def is_valid_route(route):
-    for i in range(len(route) - 1):
-        if not any(dest == route[i + 1] for dest, dist in graph[route[i]]):
-            return False
-    return True
-
 class PSO:
     def __init__(self, num_particles, w, c1, c2, num_iterations):
         self.num_particles = num_particles
@@ -159,16 +134,8 @@ class PSO:
 
     def generate_random_route(self):
         cities = list(graph.keys())
-        current_city = 1
-        route = [current_city]
-        while len(route) < len(cities):
-            neighbors = [dest for dest, dist in graph[current_city] if dest not in route]
-            if not neighbors:
-                break
-            next_city = random.choice(neighbors)
-            route.append(next_city)
-            current_city = next_city
-        return route
+        random.shuffle(cities)
+        return cities
 
     def run(self):
         for _ in range(self.num_iterations):
@@ -199,15 +166,14 @@ def calculate_total_distance(route):
                 break
     return total_distance
 
-# Parametry
-num_particles = 30
-w = 0.5
-c1 = 1.5
-c2 = 1.5
-num_iterations = 1000
+# Parametry PSO dla dużego problemu
+num_particles = 500  # Więcej cząstek, by lepiej eksplorować przestrzeń
+w = 0.7  # Waga bezwładności
+c1 = 2.0  # Składnik poznawczy
+c2 = 2.0  # Składnik społeczny
+num_iterations = 100  # Więcej iteracji
 
-# Testowanie algorytmu
-
+# Testowanie algorytmu PSO
 print("Uruchamianie algorytmu PSO...")
 pso = PSO(num_particles, w, c1, c2, num_iterations)
 best_route_pso, best_fitness_pso = pso.run()
