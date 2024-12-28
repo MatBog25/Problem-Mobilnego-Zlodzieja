@@ -167,7 +167,7 @@ def calculate_total_distance(route):
     return total_distance
 
 # Parametry PSO dla dużego problemu
-num_particles = 500  # Więcej cząstek, by lepiej eksplorować przestrzeń
+num_particles = 5000  # Więcej cząstek, by lepiej eksplorować przestrzeń
 w = 0.7  # Waga bezwładności
 c1 = 2.0  # Składnik poznawczy
 c2 = 2.0  # Składnik społeczny

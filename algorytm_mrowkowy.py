@@ -189,12 +189,12 @@ def print_solution(route, total_distance, picked_items, total_profit, total_weig
     print("Waga przenoszona w plecaku : " + str(total_weight))
 
 # Parametry ACO
-num_ants = 50
-num_iterations = 100
+num_ants = 10
+num_iterations = 1000
 alpha = 1.0
 beta = 2.0
 evaporation_rate = 0.5
-pheromone_deposit = 100
+pheromone_deposit = 200
 
 # Testowanie algorytmu ACO
 print("Uruchamianie algorytmu ACO...")

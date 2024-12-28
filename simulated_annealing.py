@@ -4,7 +4,7 @@ import math
 from data_loader import load_data
 
 # Wczytaj dane z pliku
-graph, itemset, knapsack_capacity, min_speed, max_speed, renting_ratio = load_data("basic_test_data.txt")
+graph, itemset, knapsack_capacity, min_speed, max_speed, renting_ratio = load_data("280_1.txt")
 
 # Ustaw parametry problemu
 Vmax = max_speed
@@ -172,10 +172,10 @@ def generate_random_route():
 
 # Parametry optymalizacji
 
-initial_temperature = 10000
+initial_temperature = 10000000
 cooling_rate = 0.95
 stopping_temperature = 1
-stopping_iter = 1000
+stopping_iter = 10000
 
 # Testowanie algorytmów
 

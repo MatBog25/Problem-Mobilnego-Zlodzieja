@@ -119,7 +119,7 @@ def calculate_total_distance(route):
     return total_distance
 
 # Parametry optymalizacji
-rs_iterations = 1000  # Dostosuj liczbę iteracji do wielkości problemu
+rs_iterations = 10000  # Dostosuj liczbę iteracji do wielkości problemu
 
 # Testowanie algorytmu Random Search
 print("Uruchamianie algorytmu losowego przeszukiwania...")

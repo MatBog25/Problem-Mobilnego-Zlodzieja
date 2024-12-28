@@ -2,7 +2,7 @@ import random
 from data_loader import load_data  # Funkcja wczytująca dane
 
 # Wczytaj dane z pliku
-graph, itemset, knapsack_capacity, min_speed, max_speed, renting_ratio = load_data("basic_test_data.txt")
+graph, itemset, knapsack_capacity, min_speed, max_speed, renting_ratio = load_data("280_1.txt")
 
 # Parametry problemu
 Vmax = max_speed
