@@ -81,7 +81,7 @@ def print_summary(route, items, fitness):
     print(f"Fitness: {fitness}")
 
 # Wczytanie danych z pliku
-file_path = "10miast.txt"  # Podaj odpowiednią ścieżkę do pliku
+file_path = "5miast.txt"  # Podaj odpowiednią ścieżkę do pliku
 graph, items_by_city, knapsack_capacity, min_speed, max_speed, renting_ratio = load_data(file_path)
 
 # Parametry problemu
@@ -97,4 +97,4 @@ start = time.perf_counter()
 best_route, best_items, best_fitness = solve_bruteforce()
 koniec = time.perf_counter() - start
 print_summary(best_route, best_items, best_fitness)
-print(f"Czas wykonania: {koniec} sekund")
+print(f"Czas wykonania: {koniec} s")

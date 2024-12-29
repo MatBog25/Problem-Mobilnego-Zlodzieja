@@ -3,7 +3,7 @@ import math
 from data_loader import load_data  # Wcześniej zaimplementowana funkcja
 
 # Wczytaj dane z pliku
-graph, itemset, knapsack_capacity, min_speed, max_speed, renting_ratio = load_data("280_1.txt")
+graph, itemset, knapsack_capacity, min_speed, max_speed, renting_ratio = load_data("10miast.txt")
 
 # Parametry problemu
 Vmax = max_speed
@@ -164,10 +164,15 @@ mutation_rate = 0.01
 crossover_rate = 0.9
 num_generations = 200
 
+import time
 # Testowanie algorytmu genetycznego
 print("Uruchamianie algorytmu genetycznego...")
+start = time.perf_counter()
 ga = GeneticAlgorithm(population_size, mutation_rate, crossover_rate, num_generations)
 best_route_ga, best_fitness_ga = ga.run()
 total_distance_ga = calculate_total_distance(best_route_ga)
 picked_items_ga, total_profit_ga, total_weight_ga = solve_knapsack(best_route_ga)
+koniec = time.perf_counter() - start
 print_solution(best_route_ga, total_distance_ga, picked_items_ga, total_profit_ga, total_weight_ga)
+
+print(f"Czas wykonania: {koniec} s")

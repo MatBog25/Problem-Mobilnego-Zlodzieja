@@ -4,7 +4,7 @@ import math
 from data_loader import load_data
 
 # Wczytaj dane z pliku
-graph, itemset, knapsack_capacity, min_speed, max_speed, renting_ratio = load_data("280_1.txt")
+graph, itemset, knapsack_capacity, min_speed, max_speed, renting_ratio = load_data("5miast.txt")
 
 # Ustaw parametry problemu
 Vmax = max_speed
