@@ -1,8 +1,8 @@
 import random
-from data_loader import load_data  # Wcześniej zaimplementowana funkcja
+from common.data_loader import load_data  # Wcześniej zaimplementowana funkcja
 
 # Wczytaj dane z pliku
-graph, itemset, knapsack_capacity, min_speed, max_speed, renting_ratio = load_data("280_1.txt")
+graph, itemset, knapsack_capacity, min_speed, max_speed, renting_ratio = load_data("data/5miast.txt")
 
 # Parametry problemu
 Vmax = max_speed
@@ -130,6 +130,6 @@ def print_solution(route, total_distance, picked_items, total_profit, total_weig
 print("Uruchamianie algorytmu zachłannego...")
 greedy = GreedyAlgorithm()
 best_route_greedy = greedy.run()
-total_distance_greedy = calculate_total_distance(best_route_greedy) * 10 # Poprawne obliczanie odległości
+total_distance_greedy = calculate_total_distance(best_route_greedy) # Poprawne obliczanie odległości
 picked_items_greedy, total_profit_greedy, total_weight_greedy = solve_knapsack(best_route_greedy)
 print_solution(best_route_greedy, total_distance_greedy, picked_items_greedy, total_profit_greedy, total_weight_greedy)

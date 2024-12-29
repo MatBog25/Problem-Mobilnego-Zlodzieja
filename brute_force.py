@@ -1,5 +1,5 @@
 import itertools
-from data_loader import load_data  # Wcześniej zaimplementowana funkcja
+from common.data_loader import load_data  # Wcześniej zaimplementowana funkcja
 
 def calculate_fitness(route, items):
     """Oblicza fitness dla danej trasy i zestawu przedmiotów."""
@@ -81,7 +81,7 @@ def print_summary(route, items, fitness):
     print(f"Fitness: {fitness}")
 
 # Wczytanie danych z pliku
-file_path = "5miast.txt"  # Podaj odpowiednią ścieżkę do pliku
+file_path = "data/5miast.txt"  # Podaj odpowiednią ścieżkę do pliku
 graph, items_by_city, knapsack_capacity, min_speed, max_speed, renting_ratio = load_data(file_path)
 
 # Parametry problemu

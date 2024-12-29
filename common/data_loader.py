@@ -45,9 +45,11 @@ def load_data(file_path):
     # Budowanie grafu za pomocą odległości Euklidesowych
     for city1, (x1, y1) in node_coords.items():
         graph[city1] = []
+    for city1, (x1, y1) in node_coords.items():
         for city2, (x2, y2) in node_coords.items():
             if city1 != city2:
                 distance = math.sqrt((x2 - x1) ** 2 + (y2 - y1) ** 2)
                 graph[city1].append((city2, math.ceil(distance)))
+                graph[city2].append((city1, math.ceil(distance)))  # Dodaj relację odwrotną
 
     return graph, items_by_city, knapsack_capacity, min_speed, max_speed, renting_ratio

@@ -1,8 +1,8 @@
 import random
-from data_loader import load_data  # Funkcja wczytująca dane
+from common.data_loader import load_data  # Funkcja wczytująca dane
 
 # Wczytaj dane z pliku
-graph, itemset, knapsack_capacity, min_speed, max_speed, renting_ratio = load_data("280_1.txt")
+graph, itemset, knapsack_capacity, min_speed, max_speed, renting_ratio = load_data("data/5miast.txt")
 
 # Parametry problemu
 Vmax = max_speed
@@ -70,20 +70,20 @@ def solve_knapsack(route):
     return fin, totalprof, wc
 
 def calculate_total_distance(route):
-    """Oblicza całkowitą odległość dla podanej trasy."""
     total_distance = 0
     for i in range(len(route) - 1):
         for dest, dist in graph[route[i]]:
             if dest == route[i + 1]:
                 total_distance += dist
                 break
-    # Dodaj odległość powrotu do miasta startowego (jeśli wymagane)
-    for dest, dist in graph[route[-1]]:
-        if dest == route[0]:
+    # Dodaj odległość powrotu do miasta początkowego
+    start_city = route[0]
+    last_city = route[-1]
+    for dest, dist in graph[last_city]:
+        if dest == start_city:
             total_distance += dist
             break
     return total_distance
-
 class NearestNeighbor:
     def __init__(self):
         self.route = []
@@ -108,6 +108,17 @@ class NearestNeighbor:
             self.visited.add(next_city)
             self.total_distance += shortest_distance
             current_city = next_city
+
+        # Dodaj powrót do miasta początkowego
+        if len(self.route) == len(graph):
+            start_city = self.route[0]
+            last_city = self.route[-1]
+            for dest, dist in graph[last_city]:
+                if dest == start_city:
+                    self.route.append(start_city)
+                    self.total_distance += dist
+                    break
+
 
     def run(self):
         start = random.choice(list(graph.keys()))  # Losowo wybiera miasto początkowe

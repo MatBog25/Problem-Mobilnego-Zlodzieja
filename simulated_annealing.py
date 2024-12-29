@@ -1,10 +1,10 @@
 import random
 import math
 
-from data_loader import load_data
+from common.data_loader import load_data
 
 # Wczytaj dane z pliku
-graph, itemset, knapsack_capacity, min_speed, max_speed, renting_ratio = load_data("5miast.txt")
+graph, itemset, knapsack_capacity, min_speed, max_speed, renting_ratio = load_data("data/5miast.txt")
 
 # Ustaw parametry problemu
 Vmax = max_speed
@@ -148,12 +148,18 @@ def print_solution(route, total_distance, picked_items, total_profit, total_weig
     print("Waga przenoszona w plecaku : " + str(total_weight))
 
 def calculate_total_distance(route):
+    """Oblicza całkowitą odległość dla podanej trasy."""
     total_distance = 0
     for i in range(len(route) - 1):
         for dest, dist in graph[route[i]]:
             if dest == route[i + 1]:
                 total_distance += dist
                 break
+    # Dodaj odległość powrotu do miasta startowego
+    for dest, dist in graph[route[-1]]:
+        if dest == route[0]:
+            total_distance += dist
+            break
     return total_distance
 
 # Generowanie losowej trasy początkowej

@@ -1,9 +1,9 @@
 import random
 import math
-from data_loader import load_data  # Wcześniej zaimplementowana funkcja
+from common.data_loader import load_data  # Wcześniej zaimplementowana funkcja
 
 # Wczytaj dane z pliku
-graph, itemset, knapsack_capacity, min_speed, max_speed, renting_ratio = load_data("280_1.txt")
+graph, itemset, knapsack_capacity, min_speed, max_speed, renting_ratio = load_data("data/5miast.txt")
 
 # Parametry problemu
 Vmax = max_speed
@@ -129,7 +129,14 @@ class Ant:
             self.visited.add(next_city)
             self.distance_traveled += next(dist for dest, dist in graph[current_city] if dest == next_city)
 
-        if len(self.route) < self.num_cities:
+        # Dodaj powrót do miasta początkowego
+        if len(self.route) == self.num_cities:
+            start_city = self.route[0]
+            last_city = self.route[-1]
+            self.route.append(start_city)
+            self.distance_traveled += next(dist for dest, dist in graph[last_city] if dest == start_city)
+
+        if len(self.route) < self.num_cities + 1:
             self.distance_traveled = float('inf')
 
 class ACO:
