@@ -10,65 +10,6 @@ Vmin = min_speed
 W = knapsack_capacity
 R = renting_ratio
 
-def fitness(route, items):
-    distance = calculate_total_distance(route)
-    total_weight = sum(itemset[item][1] for item in items if item != -1)
-    total_value = sum(itemset[item][0] for item in items if item != -1)
-    time = distance / ((Vmax + Vmin) / 2)
-
-    if total_weight > W:
-        return 0
-    return total_value - R * time
-
-def solve_knapsack(route):
-    """Rozwiązuje problem plecakowy dla podanej trasy."""
-    distances = [0] * len(route)
-    for i in range(1, len(route)):
-        for dest, dist in graph[route[i - 1]]:
-            if dest == route[i]:
-                distances[i] = distances[i - 1] + dist
-                break
-
-    if distances[-1] == 0:
-        distances[-1] = 1  # Zapobieganie dzieleniu przez zero
-
-    finalitemset = []
-    time = distances[-1] * 2 * (Vmax + Vmin)
-    
-    for key, value in itemset.items():
-        for item in value:
-            item_id, profit, weight = item
-            for city in route:
-                if city == item_id:  # Sprawdzamy, czy miasto jest na trasie
-                    route_index = route.index(city)
-                    if distances[route_index] == 0:
-                        distances[route_index] = 1  # Zapobieganie dzieleniu przez zero
-                    score = int(profit - (0.25 * profit * (distances[route_index] / distances[-1])) - (R * time * weight / W))
-                    finalitemset.append([item_id, city, weight, score, profit])
-
-    finalitemset.sort(key=lambda x: int(x[3]), reverse=True)
-
-    wc = 0
-    picked_items = []
-    totalprof = 0
-
-    for item in finalitemset:
-        if wc + item[2] <= W:
-            picked_items.append(item)
-            wc += item[2]
-            totalprof += item[4]
-
-    result = {}
-    for item in picked_items:
-        if item[1] not in result:
-            result[item[1]] = []
-        result[item[1]].append(item[0])
-
-    fin = [[city, sorted(items)] for city, items in result.items()]
-    fin.sort(key=lambda x: x[0])
-
-    return fin, totalprof, wc
-
 def calculate_total_distance(route):
     total_distance = 0
     for i in range(len(route) - 1):
@@ -84,6 +25,30 @@ def calculate_total_distance(route):
             total_distance += dist
             break
     return total_distance
+
+def calculate_time_and_cost(distance, total_weight):
+    """Oblicza czas podróży i koszt wynajmu."""
+    speed = Vmax - (total_weight / W) * (Vmax - Vmin)
+    time = distance / speed
+    cost = R * time
+    return time, cost
+
+def solve_knapsack(route):
+    """Rozwiązuje problem plecakowy dla podanej trasy."""
+    picked_items = []
+    total_profit = 0
+    total_weight = 0
+
+    for city in route:
+        for item in itemset.get(city, []):
+            item_id, profit, weight = item
+            if total_weight + weight <= W:
+                picked_items.append((city, item_id))
+                total_weight += weight
+                total_profit += profit
+
+    return picked_items, total_profit, total_weight
+
 class NearestNeighbor:
     def __init__(self):
         self.route = []
@@ -94,7 +59,7 @@ class NearestNeighbor:
         current_city = start
         self.route.append(current_city)
         self.visited.add(current_city)
-        
+
         while len(self.visited) < len(graph):
             next_city = None
             shortest_distance = float("inf")
@@ -119,20 +84,21 @@ class NearestNeighbor:
                     self.total_distance += dist
                     break
 
-
     def run(self):
         start = random.choice(list(graph.keys()))  # Losowo wybiera miasto początkowe
         self.find_route(start)
         return self.route, self.total_distance
 
 def print_solution(route, total_distance, picked_items, total_profit, total_weight):
+    time, cost = calculate_time_and_cost(total_distance, total_weight)
     print("Najkrótsza ścieżka: ", route)
     print("Całkowita odległość: ", total_distance)
+    print("Czas podróży: {:.2f} jednostek czasu".format(time))
     print("Złodziej powinien zabrać następujące przedmioty:")
-    for i in picked_items:
-        print("Miasto : " + str(i[0]) + "   Przedmioty : " + ', '.join(str(e) for e in i[1]))
-    print("Całkowity zysk : " + str(total_profit))
-    print("Waga przenoszona w plecaku : " + str(total_weight))
+    for city, item in picked_items:
+        print(f"Miasto {city}: Przedmiot {item}")
+    print("Całkowity zysk : ", total_profit)
+    print("Waga przenoszona w plecaku : ", total_weight)
 
 # Testowanie algorytmu Najbliższego Sąsiada
 print("Uruchamianie algorytmu Najbliższego Sąsiada...")

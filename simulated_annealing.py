@@ -4,86 +4,13 @@ import math
 from common.data_loader import load_data
 
 # Wczytaj dane z pliku
-graph, itemset, knapsack_capacity, min_speed, max_speed, renting_ratio = load_data("data/5miast.txt")
+graph, itemset, knapsack_capacity, min_speed, max_speed, renting_ratio = load_data("data/280_1.txt")
 
 # Ustaw parametry problemu
 Vmax = max_speed
 Vmin = min_speed
 W = knapsack_capacity
 R = renting_ratio
-
-class Solution:
-    def __init__(self, route, items):
-        self.route = route
-        self.items = items
-        self.fitness = 0
-
-def fitness(route, items):
-    distance = 0
-    for i in range(len(route) - 1):
-        if not any(dest == route[i + 1] for dest, dist in graph[route[i]]):
-            return 0  # Jesli niepoprawna trasa zwroc 0
-        for dest, dist in graph[route[i]]:
-            if dest == route[i + 1]:
-                distance += dist
-                break
-
-    total_weight = sum(itemset[item][1] for item in items if item != -1)
-    total_value = sum(itemset[item][0] for item in items if item != -1)
-    time = distance / ((Vmax + Vmin) / 2)
-
-    if total_weight > W:
-        return 0
-    return total_value - R * time
-
-def solve_knapsack(route):
-    distances = [0] * len(route)
-    for i in range(1, len(route)):
-        for dest, dist in graph[route[i - 1]]:
-            if dest == route[i]:
-                distances[i] = distances[i - 1] + dist
-                break
-
-    if distances[-1] == 0:
-        distances[-1] = 1  # Zapobieganie dzieleniu przez zero
-
-    finalitemset = []
-    time = distances[-1] * 2 * (Vmax + Vmin)
-    
-    for key, value in itemset.items():
-        for item in value:
-            item_id, profit, weight = item
-            for city in route:
-                if city == item_id:  # Sprawdzamy, czy miasto jest na trasie
-                    route_index = route.index(city)
-                    if distances[route_index] == 0:
-                        distances[route_index] = 1  # Zapobieganie dzieleniu przez zero
-                    score = int(profit - (0.25 * profit * (distances[route_index] / distances[-1])) - (R * time * weight / W))
-                    finalitemset.append([item_id, city, weight, score, profit])
-
-    finalitemset.sort(key=lambda x: int(x[3]), reverse=True)
-
-    wc = 0
-    picked_items = []
-    totalprof = 0
-
-    for item in finalitemset:
-        if wc + item[2] <= W:
-            picked_items.append(item)
-            wc += item[2]
-            totalprof += item[4]
-
-    result = {}
-    for item in picked_items:
-        if item[1] not in result:
-            result[item[1]] = []
-        result[item[1]].append(item[0])
-
-    fin = [[city, sorted(items)] for city, items in result.items()]
-    fin.sort(key=lambda x: x[0])
-
-    return fin, totalprof, wc
-
 
 class SimulatedAnnealing:
     def __init__(self, initial_route, temp, alpha, stopping_temp, stopping_iter):
@@ -95,8 +22,47 @@ class SimulatedAnnealing:
         self.stopping_iter = stopping_iter
         self.iteration = 1
 
-        self.current_fitness = fitness(self.current_route, [])
+        self.current_fitness, self.current_items, self.current_weight, self.current_profit, self.current_speed = self.calculate_fitness(self.current_route)
         self.best_fitness = self.current_fitness
+        self.best_items = self.current_items
+        self.best_weight = self.current_weight
+        self.best_profit = self.current_profit
+        self.best_speed = self.current_speed
+
+    def calculate_fitness(self, route):
+        total_distance = 0
+        total_profit = 0
+        total_weight = 0
+        picked_items = []
+
+        for i in range(len(route) - 1):
+            current_city = route[i]
+            next_city = route[i + 1]
+            for dest, dist in graph[current_city]:
+                if dest == next_city:
+                    total_distance += dist
+                    break
+
+            # Wybór przedmiotów w aktualnym mieście
+            for item in itemset.get(current_city, []):
+                item_id, profit, weight = item
+                if total_weight + weight <= W:
+                    picked_items.append((current_city, item_id))
+                    total_weight += weight
+                    total_profit += profit
+
+        # Dodaj dystans powrotny do miasta startowego
+        start_city = route[0]
+        last_city = route[-1]
+        for dest, dist in graph[last_city]:
+            if dest == start_city:
+                total_distance += dist
+                break
+
+        speed = Vmax - (total_weight / W) * (Vmax - Vmin)
+        time = total_distance / speed
+        fitness = total_profit
+        return fitness, picked_items, total_weight, total_profit, speed
 
     def acceptance_probability(self, candidate_fitness):
         return math.exp(-abs(candidate_fitness - self.current_fitness) / self.temp)
@@ -117,17 +83,29 @@ class SimulatedAnnealing:
                 return candidate
 
     def accept(self, candidate):
-        candidate_fitness = fitness(candidate, [])
+        candidate_fitness, candidate_items, candidate_weight, candidate_profit, candidate_speed = self.calculate_fitness(candidate)
         if candidate_fitness > self.current_fitness:
             self.current_fitness = candidate_fitness
             self.current_route = candidate
+            self.current_items = candidate_items
+            self.current_weight = candidate_weight
+            self.current_profit = candidate_profit
+            self.current_speed = candidate_speed
             if candidate_fitness > self.best_fitness:
                 self.best_fitness = candidate_fitness
                 self.best_route = candidate
+                self.best_items = candidate_items
+                self.best_weight = candidate_weight
+                self.best_profit = candidate_profit
+                self.best_speed = candidate_speed
         else:
             if random.random() < self.acceptance_probability(candidate_fitness):
                 self.current_fitness = candidate_fitness
                 self.current_route = candidate
+                self.current_items = candidate_items
+                self.current_weight = candidate_weight
+                self.current_profit = candidate_profit
+                self.current_speed = candidate_speed
 
     def anneal(self):
         while self.temp >= self.stopping_temp and self.iteration < self.stopping_iter:
@@ -136,16 +114,18 @@ class SimulatedAnnealing:
             self.temp *= self.alpha
             self.iteration += 1
 
-        return self.best_route, self.best_fitness
+        return self.best_route, self.best_fitness, self.best_items, self.best_weight, self.best_profit, self.best_speed
 
-def print_solution(route, total_distance, picked_items, total_profit, total_weight):
+def print_solution(route, total_distance, picked_items, total_profit, total_weight, total_time, speed):
     print("Najkrótsza ścieżka: ", route)
     print("Całkowita odległość: ", total_distance)
+    print("Czas podróży: {:.2f} jednostek czasu".format(total_time))
+    print("Finalna prędkość złodzieja: {:.2f}".format(speed))
     print("Złodziej powinien zabrać następujące przedmioty:")
-    for i in picked_items:
-        print("Miasto : " + str(i[0]) + "   Przedmioty : " + ', '.join(str(e) for e in i[1]))
-    print("Całkowity zysk : " + str(total_profit))
-    print("Waga przenoszona w plecaku : " + str(total_weight))
+    for city, item in picked_items:
+        print(f"Miasto {city}: Przedmiot {item}")
+    print("Całkowity zysk : ", total_profit)
+    print("Waga przenoszona w plecaku : ", total_weight)
 
 def calculate_total_distance(route):
     """Oblicza całkowitą odległość dla podanej trasy."""
@@ -177,18 +157,16 @@ def generate_random_route():
     return route
 
 # Parametry optymalizacji
-
 initial_temperature = 10000000
 cooling_rate = 0.95
 stopping_temperature = 1
 stopping_iter = 10000
 
 # Testowanie algorytmów
-
 print("\nUruchamianie algorytmu symulowanego wyżarzania...")
 initial_route = generate_random_route()  # Użycie losowej trasy jako początkowej
 sa = SimulatedAnnealing(initial_route=initial_route, temp=initial_temperature, alpha=cooling_rate, stopping_temp=stopping_temperature, stopping_iter=stopping_iter)
-best_route_sa, best_fitness_sa = sa.anneal()
+best_route_sa, best_fitness_sa, best_items_sa, best_weight_sa, best_profit_sa, best_speed_sa = sa.anneal()
 total_distance_sa = calculate_total_distance(best_route_sa)
-picked_items_sa, total_profit_sa, total_weight_sa = solve_knapsack(best_route_sa)
-print_solution(best_route_sa, total_distance_sa, picked_items_sa, total_profit_sa, total_weight_sa)
+total_time_sa = total_distance_sa / (Vmax - (best_weight_sa / W) * (Vmax - Vmin))
+print_solution(best_route_sa, total_distance_sa, best_items_sa, best_profit_sa, best_weight_sa, total_time_sa, best_speed_sa)

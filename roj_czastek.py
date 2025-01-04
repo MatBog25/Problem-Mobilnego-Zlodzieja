@@ -15,7 +15,7 @@ class Particle:
     def __init__(self, route):
         self.route = self.ensure_all_cities(route)
         self.best_route = list(self.route)
-        self.best_fitness = fitness(self.route, [])
+        self.best_fitness, self.picked_items, self.total_weight, self.total_profit, self.final_speed = self.calculate_fitness()
         self.velocity = []
 
     def ensure_all_cities(self, route):
@@ -25,6 +25,41 @@ class Particle:
         route += missing_cities  # Dodaj brakujące miasta
         random.shuffle(route)  # Losowo permutuj trasę
         return route
+
+    def calculate_fitness(self):
+        total_distance = 0
+        total_profit = 0
+        total_weight = 0
+        picked_items = []
+
+        for i in range(len(self.route) - 1):
+            current_city = self.route[i]
+            next_city = self.route[i + 1]
+            for dest, dist in graph[current_city]:
+                if dest == next_city:
+                    total_distance += dist
+                    break
+
+            # Wybór przedmiotów w aktualnym mieście
+            for item in itemset.get(current_city, []):
+                item_id, profit, weight = item
+                if total_weight + weight <= W:
+                    picked_items.append((current_city, item_id))
+                    total_weight += weight
+                    total_profit += profit
+
+        # Dodaj dystans powrotny do miasta startowego
+        start_city = self.route[0]
+        last_city = self.route[-1]
+        for dest, dist in graph[last_city]:
+            if dest == start_city:
+                total_distance += dist
+                break
+
+        final_speed = Vmax - (total_weight / W) * (Vmax - Vmin)
+        time = total_distance / final_speed
+        fitness = total_profit
+        return fitness, picked_items, total_weight, total_profit, final_speed
 
     def update_velocity(self, global_best_route, w, c1, c2):
         self.velocity = []
@@ -44,77 +79,14 @@ class Particle:
                 if i < len(new_route) and j < len(new_route):
                     new_route[i], new_route[j] = new_route[j], new_route[i]
         self.route = self.ensure_all_cities(new_route)  # Uzupełnij brakujące miasta
-        new_fitness = fitness(self.route, [])
+        new_fitness, new_picked_items, new_total_weight, new_total_profit, new_final_speed = self.calculate_fitness()
         if new_fitness > self.best_fitness:
             self.best_fitness = new_fitness
             self.best_route = list(self.route)
-
-def fitness(route, items):
-    distance = 0
-    for i in range(len(route) - 1):
-        if not any(dest == route[i + 1] for dest, dist in graph[route[i]]):
-            return 0  # Niepoprawna trasa
-        for dest, dist in graph[route[i]]:
-            if dest == route[i + 1]:
-                distance += dist
-                break
-
-    total_weight = sum(itemset[item][1] for item in items if item != -1)
-    total_value = sum(itemset[item][0] for item in items if item != -1)
-    time = distance / ((Vmax + Vmin) / 2)
-
-    if total_weight > W:
-        return 0
-    return total_value - R * time
-
-def solve_knapsack(route):
-    """Rozwiązuje problem plecakowy dla podanej trasy."""
-    distances = [0] * len(route)
-    for i in range(1, len(route)):
-        for dest, dist in graph[route[i - 1]]:
-            if dest == route[i]:
-                distances[i] = distances[i - 1] + dist
-                break
-
-    if distances[-1] == 0:
-        distances[-1] = 1  # Zapobieganie dzieleniu przez zero
-
-    finalitemset = []
-    time = distances[-1] * 2 * (Vmax + Vmin)
-    
-    for key, value in itemset.items():
-        for item in value:
-            item_id, profit, weight = item
-            for city in route:
-                if city == item_id:  # Sprawdzamy, czy miasto jest na trasie
-                    route_index = route.index(city)
-                    if distances[route_index] == 0:
-                        distances[route_index] = 1  # Zapobieganie dzieleniu przez zero
-                    score = int(profit - (0.25 * profit * (distances[route_index] / distances[-1])) - (R * time * weight / W))
-                    finalitemset.append([item_id, city, weight, score, profit])
-
-    finalitemset.sort(key=lambda x: int(x[3]), reverse=True)
-
-    wc = 0
-    picked_items = []
-    totalprof = 0
-
-    for item in finalitemset:
-        if wc + item[2] <= W:
-            picked_items.append(item)
-            wc += item[2]
-            totalprof += item[4]
-
-    result = {}
-    for item in picked_items:
-        if item[1] not in result:
-            result[item[1]] = []
-        result[item[1]].append(item[0])
-
-    fin = [[city, sorted(items)] for city, items in result.items()]
-    fin.sort(key=lambda x: x[0])
-
-    return fin, totalprof, wc
+            self.picked_items = new_picked_items
+            self.total_weight = new_total_weight
+            self.total_profit = new_total_profit
+            self.final_speed = new_final_speed
 
 class PSO:
     def __init__(self, num_particles, w, c1, c2, num_iterations):
@@ -131,6 +103,10 @@ class PSO:
 
         self.global_best_route = self.particles[0].best_route
         self.global_best_fitness = self.particles[0].best_fitness
+        self.global_best_items = self.particles[0].picked_items
+        self.global_best_weight = self.particles[0].total_weight
+        self.global_best_profit = self.particles[0].total_profit
+        self.global_best_speed = self.particles[0].final_speed
 
     def generate_random_route(self):
         cities = list(graph.keys())
@@ -145,17 +121,13 @@ class PSO:
                 if particle.best_fitness > self.global_best_fitness:
                     self.global_best_fitness = particle.best_fitness
                     self.global_best_route = particle.best_route
+                    self.global_best_items = particle.picked_items
+                    self.global_best_weight = particle.total_weight
+                    self.global_best_profit = particle.total_profit
+                    self.global_best_speed = particle.final_speed
 
-        return self.global_best_route, self.global_best_fitness
-
-def print_solution(route, total_distance, picked_items, total_profit, total_weight):
-    print("Najkrótsza ścieżka: ", route)
-    print("Całkowita odległość: ", total_distance)
-    print("Złodziej powinien zabrać następujące przedmioty:")
-    for i in picked_items:
-        print("Miasto : " + str(i[0]) + "   Przedmioty : " + ', '.join(str(e) for e in i[1]))
-    print("Całkowity zysk : " + str(total_profit))
-    print("Waga przenoszona w plecaku : " + str(total_weight))
+        return (self.global_best_route, self.global_best_fitness, self.global_best_items, 
+                self.global_best_weight, self.global_best_profit, self.global_best_speed)
 
 def calculate_total_distance(route):
     """Oblicza całkowitą odległość dla podanej trasy."""
@@ -172,17 +144,30 @@ def calculate_total_distance(route):
             break
     return total_distance
 
+def print_solution(route, total_distance, picked_items, total_profit, total_weight, total_time, final_speed):
+    print("Najkrótsza ścieżka: ", route)
+    print("Całkowita odległość: ", total_distance)
+    print("Czas podróży: {:.2f} jednostek czasu".format(total_time))
+    print("Finalna prędkość złodzieja: {:.2f}".format(final_speed))
+    print("Złodziej powinien zabrać następujące przedmioty:")
+    for city, item in picked_items:
+        print(f"Miasto {city}: Przedmiot {item}")
+    print("Całkowity zysk : ", total_profit)
+    print("Waga przenoszona w plecaku : ", total_weight)
+
 # Parametry PSO dla dużego problemu
-num_particles = 5000  # Więcej cząstek, by lepiej eksplorować przestrzeń
+num_particles = 100  # Liczba cząstek
 w = 0.7  # Waga bezwładności
 c1 = 2.0  # Składnik poznawczy
 c2 = 2.0  # Składnik społeczny
-num_iterations = 100  # Więcej iteracji
+num_iterations = 100  # Liczba iteracji
 
 # Testowanie algorytmu PSO
 print("Uruchamianie algorytmu PSO...")
 pso = PSO(num_particles, w, c1, c2, num_iterations)
-best_route_pso, best_fitness_pso = pso.run()
+(best_route_pso, best_fitness_pso, best_items_pso, 
+ total_weight_pso, total_profit_pso, final_speed_pso) = pso.run()
+
 total_distance_pso = calculate_total_distance(best_route_pso)
-picked_items_pso, total_profit_pso, total_weight_pso = solve_knapsack(best_route_pso)
-print_solution(best_route_pso, total_distance_pso, picked_items_pso, total_profit_pso, total_weight_pso)
+total_time_pso = total_distance_pso / final_speed_pso
+print_solution(best_route_pso, total_distance_pso, best_items_pso, total_profit_pso, total_weight_pso, total_time_pso, final_speed_pso)
