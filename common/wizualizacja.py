@@ -61,6 +61,6 @@ def visualize_route(file_path, route, title="Wybrana trasa"):
     plt.show()
 
 # Przykład użycia
-file_path = "data/5miast.txt"  # Plik z danymi o miastach
-route =  [5, 2, 1, 4, 3]
+file_path = "data/10miast.txt"  # Plik z danymi o miastach
+route =  [10, 9, 6, 2, 5, 1, 4, 7, 3, 8]
 visualize_route(file_path, route, title="Najlepsza trasa")
