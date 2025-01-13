@@ -1,9 +1,8 @@
 import random
-import math
 from common.data_loader import load_data
 
 # Wczytaj dane z pliku
-graph, itemset, knapsack_capacity, min_speed, max_speed, renting_ratio = load_data("data/33810_1.txt")
+graph, itemset, knapsack_capacity, min_speed, max_speed, renting_ratio = load_data("data/280_1.txt")
 
 # Parametry problemu
 Vmax = max_speed
@@ -26,7 +25,7 @@ class Ant:
     def select_next_city(self, current_city, pheromone):
         probabilities = []
         for dest, dist in graph[current_city]:
-            if dest not in self.visited:
+            if dest not in self.visited and dist > 0:  # Unikamy odległości 0
                 tau = pheromone[current_city][dest] ** self.alpha
                 eta = (1.0 / dist) ** self.beta
                 probabilities.append((dest, tau * eta))
@@ -44,9 +43,13 @@ class Ant:
         return probabilities[-1][0]
 
     def pick_items(self, current_city):
-        for item in itemset.get(current_city, []):
-            item_id, profit, weight = item
-            if self.current_weight + weight <= W:  # Sprawdź pojemność plecaka
+        """Wybiera przedmioty z bieżącego miasta zgodnie z ograniczeniami plecaka."""
+        items = itemset.get(current_city, [])
+        # Sortuj przedmioty po zysku do wagi malejąco
+        items = sorted(items, key=lambda x: x[1] / x[2], reverse=True)
+        
+        for item_id, profit, weight in items:
+            if self.current_weight + weight <= W:
                 self.items_picked.append(item_id)
                 self.total_profit += profit
                 self.current_weight += weight
@@ -58,23 +61,19 @@ class Ant:
 
         while len(self.route) < self.num_cities:
             current_city = self.route[-1]
-            self.pick_items(current_city)  # Wybór przedmiotów w aktualnym mieście
+            self.pick_items(current_city)
             next_city = self.select_next_city(current_city, pheromone)
             if next_city is None:
-                break
+                self.distance_traveled = float('inf')
+                return
             self.route.append(next_city)
             self.visited.add(next_city)
             self.distance_traveled += next(dist for dest, dist in graph[current_city] if dest == next_city)
 
-        # Dodaj powrót do miasta początkowego
-        if len(self.route) == self.num_cities:
-            start_city = self.route[0]
-            last_city = self.route[-1]
-            self.route.append(start_city)
-            self.distance_traveled += next(dist for dest, dist in graph[last_city] if dest == start_city)
-
-        if len(self.route) < self.num_cities + 1:
-            self.distance_traveled = float('inf')
+        # Powrót do miasta początkowego
+        start_city = self.route[0]
+        last_city = self.route[-1]
+        self.distance_traveled += next(dist for dest, dist in graph[last_city] if dest == start_city)
 
 class ACO:
     def __init__(self, num_ants, num_iterations, alpha, beta, evaporation_rate, pheromone_deposit):
@@ -86,13 +85,7 @@ class ACO:
         self.pheromone_deposit = pheromone_deposit
 
     def initialize_pheromone(self, num_cities):
-        pheromone = {}
-        for i in range(1, num_cities + 1):
-            pheromone[i] = {}
-            for j in range(1, num_cities + 1):
-                if i != j:
-                    pheromone[i][j] = 1.0
-        return pheromone
+        return {i: {j: 1.0 for j in range(1, num_cities + 1) if i != j} for i in range(1, num_cities + 1)}
 
     def run(self):
         num_cities = len(graph)
@@ -102,63 +95,65 @@ class ACO:
         best_items = []
         best_profit = 0
         best_time = float('inf')
+        best_total_weight = 0
 
-        for _ in range(self.num_iterations):
+        for iteration in range(self.num_iterations):
             ants = [Ant(self.alpha, self.beta, num_cities) for _ in range(self.num_ants)]
             for ant in ants:
                 ant.travel(pheromone)
-                time = ant.distance_traveled / (Vmax - (ant.current_weight / W) * (Vmax - Vmin))
+                if ant.distance_traveled == float('inf'):
+                    continue
+
+                # Oblicz czas i koszt
+                speed = max(Vmin, Vmax - (ant.current_weight / W) * (Vmax - Vmin))
+                time = ant.distance_traveled / speed
                 cost = R * time
-                profit_with_cost = ant.total_profit - cost
 
-                if ant.distance_traveled < best_distance and profit_with_cost > best_profit:
-                    best_distance = ant.distance_traveled
+                # Aktualizacja najlepszego wyniku
+                if ant.total_profit > best_profit:
+                    best_profit = ant.total_profit
                     best_route = ant.route
+                    best_distance = ant.distance_traveled
                     best_items = ant.items_picked
-                    best_profit = profit_with_cost
                     best_time = time
+                    best_total_weight = ant.current_weight
 
-            for i in range(1, num_cities + 1):
-                for j in range(1, num_cities + 1):
-                    if i != j:
-                        pheromone[i][j] *= (1 - self.evaporation_rate)
+            # Aktualizacja feromonów
+            for i in pheromone:
+                for j in pheromone[i]:
+                    pheromone[i][j] *= (1 - self.evaporation_rate)
 
             for ant in ants:
-                if ant.distance_traveled < float('inf'):
+                if ant.distance_traveled < float('inf') and ant.total_profit > 0:
                     for i in range(len(ant.route) - 1):
                         city1 = ant.route[i]
                         city2 = ant.route[i + 1]
                         pheromone[city1][city2] += self.pheromone_deposit / ant.distance_traveled
                         pheromone[city2][city1] += self.pheromone_deposit / ant.distance_traveled
 
-        return best_route, best_distance, best_items, best_profit, best_time
+        return best_route, best_distance, best_items, best_profit, best_total_weight, best_time
 
 def print_solution(route, total_distance, picked_items, total_profit, total_weight, total_time):
     print("Najkrótsza ścieżka: ", route)
     print("Całkowita odległość: ", total_distance)
     print("Czas podróży: {:.2f} jednostek czasu".format(total_time))
-    print("Całkowity zysk po uwzględnieniu kosztu wynajmu: {:.2f}".format(total_profit))
-    print("Złodziej powinien zabrać następujące przedmioty:", picked_items)
+    print("Złodziej powinien zabrać następujące przedmioty:")
+    for item in picked_items:
+        print(f"Przedmiot {item}")
+    print("Całkowity zysk: {:.2f}".format(total_profit))
     print("Całkowita waga przedmiotów: ", total_weight)
 
 # Parametry ACO
 num_ants = 10
-num_iterations = 10
-alpha = 1.0
-beta = 2.0
+num_iterations = 1
+alpha = 5.0
+beta = 5.0
 evaporation_rate = 0.5
 pheromone_deposit = 10
 
-# Testowanie algorytmu ACO
-print("Uruchamianie algorytmu ACO...")
+# Uruchomienie algorytmu ACO
 aco = ACO(num_ants, num_iterations, alpha, beta, evaporation_rate, pheromone_deposit)
-best_route_aco, best_distance_aco, best_items_aco, best_profit_aco, best_time_aco = aco.run()
+best_route, best_distance, best_items, best_profit, best_total_weight, best_time = aco.run()
 
-# Oblicz wagę wszystkich przedmiotów
-total_weight = 0
-for city, items in itemset.items():
-    for item_id, profit, weight in items:
-        if item_id in best_items_aco:
-            total_weight += weight
-
-print_solution(best_route_aco, best_distance_aco, best_items_aco, best_profit_aco, total_weight, best_time_aco)
+# Wyświetlenie wyników
+print_solution(best_route, best_distance, best_items, best_profit, best_total_weight, best_time)

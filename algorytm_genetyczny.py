@@ -3,7 +3,7 @@ import random
 import math
 
 # Wczytaj dane z pliku za pomocą funkcji load_data, która zwraca graf, przedmioty, i parametry problemu
-graph, itemset, knapsack_capacity, min_speed, max_speed, renting_ratio = load_data("data/5miast.txt")
+graph, itemset, knapsack_capacity, min_speed, max_speed, renting_ratio = load_data("data/280_1.txt")
 
 # Parametry problemu
 Vmax = max_speed
@@ -127,10 +127,10 @@ class GeneticAlgorithm:
         return best_solution
 
 # Parametry algorytmu genetycznego
-population_size = 100
+population_size = 10000
 mutation_rate = 0.01
 crossover_rate = 0.9
-num_generations = 100
+num_generations = 10
 
 # Uruchomienie algorytmu genetycznego
 print("Uruchamianie algorytmu genetycznego...")

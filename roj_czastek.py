@@ -3,7 +3,7 @@ import math
 from common.data_loader import load_data  # Wcześniej zaimplementowana funkcja
 
 # Wczytaj dane z pliku
-graph, itemset, knapsack_capacity, min_speed, max_speed, renting_ratio = load_data("data/5miast.txt")
+graph, itemset, knapsack_capacity, min_speed, max_speed, renting_ratio = load_data("data/280_1.txt")
 
 # Parametry problemu
 Vmax = max_speed
@@ -156,11 +156,11 @@ def print_solution(route, total_distance, picked_items, total_profit, total_weig
     print("Waga przenoszona w plecaku : ", total_weight)
 
 # Parametry PSO dla dużego problemu
-num_particles = 100  # Liczba cząstek
+num_particles = 1000  # Liczba cząstek
 w = 0.7  # Waga bezwładności
-c1 = 2.0  # Składnik poznawczy
-c2 = 2.0  # Składnik społeczny
-num_iterations = 100  # Liczba iteracji
+c1 = 10.0  # Składnik poznawczy
+c2 = 10.0  # Składnik społeczny
+num_iterations = 1000  # Liczba iteracji
 
 # Testowanie algorytmu PSO
 print("Uruchamianie algorytmu PSO...")

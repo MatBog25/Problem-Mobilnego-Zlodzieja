@@ -1,6 +1,5 @@
 import random
 import math
-
 from common.data_loader import load_data
 
 # Wczytaj dane z pliku
