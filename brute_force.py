@@ -1,5 +1,5 @@
 import itertools
-from common.data_loader import load_data  # Wcześniej zaimplementowana funkcja
+from common.data_loader import load_data
 
 def calculate_fitness(route, items):
     """Oblicza fitness dla danej trasy i zestawu przedmiotów."""
@@ -20,7 +20,6 @@ def calculate_total_distance(route):
             if dest == route[i + 1]:
                 total_distance += dist
                 break
-    # Dodaj odległość powrotu do miasta startowego
     for dest, dist in graph[route[-1]]:
         if dest == route[0]:
             total_distance += dist
@@ -80,8 +79,7 @@ def print_summary(route, items, fitness):
     print(f"Całkowita wartość przedmiotów: {total_value}")
     print(f"Fitness: {fitness}")
 
-# Wczytanie danych z pliku
-file_path = "data/5miast.txt"  # Podaj odpowiednią ścieżkę do pliku
+file_path = "data/5miast.txt"
 graph, items_by_city, knapsack_capacity, min_speed, max_speed, renting_ratio = load_data(file_path)
 
 # Parametry problemu

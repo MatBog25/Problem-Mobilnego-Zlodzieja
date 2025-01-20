@@ -2,7 +2,7 @@ import itertools
 import time
 import math
 import multiprocessing
-from common.data_loader import load_data  # Wczytujemy wcześniej przygotowany moduł
+from common.data_loader import load_data
 
 def calculate_total_distance(route, graph):
     """Oblicza całkowitą odległość dla podanej trasy."""
@@ -14,7 +14,6 @@ def calculate_total_distance(route, graph):
             if dest == next_city:
                 total_distance += dist
                 break
-    # Dodaj odległość powrotu do miasta startowego
     last_city = route[-1]
     first_city = route[0]
     for dest, dist in graph[last_city]:
@@ -111,7 +110,7 @@ def print_summary(route, items, fitness, graph, items_by_city):
     print(f"Fitness: {fitness}")
 
 def main():
-    file_path = "data/12miast.txt"  # Ścieżka do pliku z danymi
+    file_path = "data/10miast.txt"
     graph, items_by_city, knapsack_capacity, min_speed, max_speed, renting_ratio = load_data(file_path)
 
     # Parametry problemu
