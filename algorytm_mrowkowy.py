@@ -9,6 +9,8 @@ Vmax = max_speed
 Vmin = min_speed
 W = knapsack_capacity
 R = renting_ratio
+# Obliczanie v_w - spadek prędkości w funkcji ciężaru plecaka
+v_w = (Vmax - Vmin) / W
 
 class Ant:
     def __init__(self, alpha, beta, num_cities):
@@ -21,6 +23,7 @@ class Ant:
         self.distance_traveled = 0
         self.total_profit = 0
         self.current_weight = 0
+        self.weights_at_cities = []  # Lista wag plecaka w każdym mieście
 
     def select_next_city(self, current_city, pheromone):
         probabilities = []
@@ -50,18 +53,71 @@ class Ant:
         
         for item_id, profit, weight in items:
             if self.current_weight + weight <= W:
-                self.items_picked.append(item_id)
+                self.items_picked.append((current_city, item_id))  # Zapisz miasto i przedmiot
                 self.total_profit += profit
                 self.current_weight += weight
+
+    def calculate_travel_time(self):
+        """Oblicza czas podróży zgodnie z funkcją celu."""
+        total_time = 0
+        
+        # Obliczanie czasu podróży między kolejnymi miastami
+        for i in range(len(self.route) - 1):
+            current_city = self.route[i]
+            next_city = self.route[i + 1]
+            
+            # Znajdź odległość między miastami
+            distance = 0
+            for dest, dist in graph[current_city]:
+                if dest == next_city:
+                    distance = dist
+                    break
+            
+            # Oblicz prędkość na podstawie aktualnej wagi plecaka
+            current_weight = self.weights_at_cities[i]
+            speed = Vmax - current_weight * v_w
+            
+            # Dodaj czas podróży
+            total_time += distance / speed
+        
+        # Dodaj czas powrotu do miasta początkowego
+        last_city = self.route[-1]
+        start_city = self.route[0]
+        
+        # Znajdź odległość powrotu
+        return_distance = 0
+        for dest, dist in graph[last_city]:
+            if dest == start_city:
+                return_distance = dist
+                break
+        
+        # Oblicz prędkość na podstawie wagi plecaka po odwiedzeniu wszystkich miast
+        last_weight = self.weights_at_cities[-1]
+        return_speed = Vmax - last_weight * v_w
+        
+        # Dodaj czas powrotu
+        total_time += return_distance / return_speed
+        
+        return total_time
+
+    def calculate_objective_value(self):
+        """Oblicza wartość funkcji celu."""
+        travel_time = self.calculate_travel_time()
+        travel_cost = R * travel_time
+        objective_value = self.total_profit - travel_cost
+        return objective_value, travel_time, travel_cost
 
     def travel(self, pheromone):
         self.route = [random.randint(1, self.num_cities)]
         self.visited = set(self.route)
         self.distance_traveled = 0
+        self.weights_at_cities = [0]  # Początkowa waga plecaka
 
         while len(self.route) < self.num_cities:
             current_city = self.route[-1]
             self.pick_items(current_city)
+            self.weights_at_cities.append(self.current_weight)  # Zapisz aktualną wagę plecaka
+            
             next_city = self.select_next_city(current_city, pheromone)
             if next_city is None:
                 self.distance_traveled = float('inf')
@@ -74,6 +130,9 @@ class Ant:
         start_city = self.route[0]
         last_city = self.route[-1]
         self.distance_traveled += next(dist for dest, dist in graph[last_city] if dest == start_city)
+        
+        # Oblicz wartość funkcji celu
+        self.objective_value, self.travel_time, self.travel_cost = self.calculate_objective_value()
 
 class ACO:
     def __init__(self, num_ants, num_iterations, alpha, beta, evaporation_rate, pheromone_deposit):
@@ -96,6 +155,8 @@ class ACO:
         best_profit = 0
         best_time = float('inf')
         best_total_weight = 0
+        best_objective_value = float('-inf')
+        best_travel_cost = 0
 
         for iteration in range(self.num_iterations):
             ants = [Ant(self.alpha, self.beta, num_cities) for _ in range(self.num_ants)]
@@ -104,19 +165,16 @@ class ACO:
                 if ant.distance_traveled == float('inf'):
                     continue
 
-                # Oblicz czas i koszt
-                speed = max(Vmin, Vmax - (ant.current_weight / W) * (Vmax - Vmin))
-                time = ant.distance_traveled / speed
-                cost = R * time
-
-                # Aktualizacja najlepszego wyniku
-                if ant.total_profit > best_profit:
+                # Aktualizacja najlepszego wyniku na podstawie wartości funkcji celu
+                if ant.objective_value > best_objective_value:
+                    best_objective_value = ant.objective_value
                     best_profit = ant.total_profit
                     best_route = ant.route
                     best_distance = ant.distance_traveled
                     best_items = ant.items_picked
-                    best_time = time
+                    best_time = ant.travel_time
                     best_total_weight = ant.current_weight
+                    best_travel_cost = ant.travel_cost
 
             # Aktualizacja feromonów
             for i in pheromone:
@@ -124,36 +182,39 @@ class ACO:
                     pheromone[i][j] *= (1 - self.evaporation_rate)
 
             for ant in ants:
-                if ant.distance_traveled < float('inf') and ant.total_profit > 0:
+                if ant.distance_traveled < float('inf') and ant.objective_value > float('-inf'):
+                    # Aktualizacja feromonów na podstawie wartości funkcji celu
                     for i in range(len(ant.route) - 1):
                         city1 = ant.route[i]
                         city2 = ant.route[i + 1]
-                        pheromone[city1][city2] += self.pheromone_deposit / ant.distance_traveled
-                        pheromone[city2][city1] += self.pheromone_deposit / ant.distance_traveled
+                        pheromone[city1][city2] += self.pheromone_deposit * ant.objective_value
+                        pheromone[city2][city1] += self.pheromone_deposit * ant.objective_value
 
-        return best_route, best_distance, best_items, best_profit, best_total_weight, best_time
+        return best_route, best_distance, best_items, best_profit, best_total_weight, best_time, best_objective_value, best_travel_cost
 
-def print_solution(route, total_distance, picked_items, total_profit, total_weight, total_time):
+def print_solution(route, total_distance, picked_items, total_profit, total_weight, total_time, objective_value, travel_cost):
     print("Najkrótsza ścieżka: ", route)
     print("Całkowita odległość: ", total_distance)
     print("Czas podróży: {:.2f} jednostek czasu".format(total_time))
+    print("Koszt podróży: {:.2f}".format(travel_cost))
     print("Złodziej powinien zabrać następujące przedmioty:")
-    for item in picked_items:
-        print(f"Przedmiot {item}")
-    print("Całkowity zysk: {:.2f}".format(total_profit))
+    for city, item in picked_items:
+        print(f"Miasto {city}: Przedmiot {item}")
+    print("Całkowity zysk z przedmiotów: {:.2f}".format(total_profit))
     print("Całkowita waga przedmiotów: ", total_weight)
+    print("Wartość funkcji celu: {:.2f}".format(objective_value))
 
 # Parametry ACO
-num_ants = 10
-num_iterations = 1
-alpha = 5.0
-beta = 5.0
+num_ants = 100
+num_iterations = 100
+alpha = 1.0
+beta = 1.0
 evaporation_rate = 0.5
 pheromone_deposit = 10
 
 # Uruchomienie algorytmu ACO
 aco = ACO(num_ants, num_iterations, alpha, beta, evaporation_rate, pheromone_deposit)
-best_route, best_distance, best_items, best_profit, best_total_weight, best_time = aco.run()
+best_route, best_distance, best_items, best_profit, best_total_weight, best_time, best_objective_value, best_travel_cost = aco.run()
 
 # Wyświetlenie wyników
-print_solution(best_route, best_distance, best_items, best_profit, best_total_weight, best_time)
+print_solution(best_route, best_distance, best_items, best_profit, best_total_weight, best_time, best_objective_value, best_travel_cost)

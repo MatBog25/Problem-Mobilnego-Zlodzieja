@@ -1,0 +1,1 @@
+# Ten plik jest wymagany, aby Python traktował katalog common jako pakiet 
