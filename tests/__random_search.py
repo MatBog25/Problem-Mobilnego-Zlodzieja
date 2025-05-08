@@ -2,76 +2,197 @@ import random
 import time
 import tracemalloc
 import pandas as pd
-from tqdm import tqdm
-from common.data_loader import load_data
+import os
+from common.data_loader import load_data  # Wcześniej zaimplementowana funkcja
 
-# Pliki testowe (instancje problemu)
-files = ["data/280_1.txt", "data/2000_1.txt", "data/4461_1.txt"]
+# Wczytaj dane z pliku
+graph, itemset, knapsack_capacity, min_speed, max_speed, renting_ratio = load_data("data/2000_1.txt")
 
-# Parametry algorytmu
-iteration_ranges = [100, 200, 500, 1000]  # Liczba iteracji
-stability_runs = 5  # Liczba uruchomień dla stabilności
+# Parametry problemu
+Vmax = max_speed
+Vmin = min_speed
+W = knapsack_capacity
+R = renting_ratio
+# Obliczanie v_w - spadek prędkości w funkcji ciężaru plecaka
+v_w = (Vmax - Vmin) / W
 
-# Funkcje pomocnicze
-def calculate_total_distance(route, graph):
+def calculate_total_distance(route):
+    """Oblicza całkowitą odległość dla podanej trasy."""
     total_distance = 0
     for i in range(len(route) - 1):
         for dest, dist in graph[route[i]]:
             if dest == route[i + 1]:
                 total_distance += dist
                 break
+    # Dodaj odległość powrotu do miasta początkowego
     for dest, dist in graph[route[-1]]:
         if dest == route[0]:
             total_distance += dist
             break
     return total_distance
 
-def solve_knapsack(route, itemset, W):
+def calculate_travel_time(route, weights_at_cities):
+    """Oblicza czas podróży zgodnie z funkcją celu."""
+    total_time = 0
+    
+    # Obliczanie czasu podróży między kolejnymi miastami (od x_1 do x_n)
+    for i in range(len(route) - 1):
+        current_city = route[i]
+        next_city = route[i + 1]
+        
+        # Znajdź odległość między miastami
+        distance = 0
+        for dest, dist in graph[current_city]:
+            if dest == next_city:
+                distance = dist
+                break
+        
+        # Oblicz prędkość na podstawie aktualnej wagi plecaka
+        current_weight = weights_at_cities[i]
+        speed = Vmax - current_weight * v_w  # Dokładnie zgodnie z funkcją celu
+        
+        # Dodaj czas podróży
+        total_time += distance / speed
+    
+    # Dodaj czas powrotu do miasta początkowego (od x_n do x_1)
+    last_city = route[-1]
+    start_city = route[0]
+    
+    # Znajdź odległość powrotu
+    return_distance = 0
+    for dest, dist in graph[last_city]:
+        if dest == start_city:
+            return_distance = dist
+            break
+    
+    # Oblicz prędkość na podstawie wagi plecaka po odwiedzeniu wszystkich miast
+    last_weight = weights_at_cities[-1]
+    return_speed = Vmax - last_weight * v_w  # Dokładnie zgodnie z funkcją celu
+    
+    # Dodaj czas powrotu
+    total_time += return_distance / return_speed
+    
+    return total_time
+
+def calculate_objective_function(route, picked_items, total_profit):
+    """Oblicza wartość funkcji celu zgodnie z podanym wzorem matematycznym."""
+    # Obliczanie wag plecaka w każdym mieście
+    weights_at_cities = [0] * len(route)
+    current_weight = 0
+    
+    # Dla każdego miasta w trasie
+    for i, city in enumerate(route):
+        # Dodaj wagę przedmiotów zabranych w tym mieście
+        for item_city, item_id in picked_items:
+            if item_city == city:
+                # Znajdź przedmiot w itemset
+                for item in itemset.get(city, []):
+                    if item[0] == item_id:  # item[0] to item_id
+                        current_weight += item[2]  # item[2] to waga
+                        break
+        
+        # Zapisz aktualną wagę plecaka po opuszczeniu miasta
+        weights_at_cities[i] = current_weight
+    
+    # Oblicz czas podróży
+    travel_time = calculate_travel_time(route, weights_at_cities)
+    
+    # Oblicz koszt podróży
+    travel_cost = R * travel_time
+    
+    # Oblicz wartość funkcji celu
+    objective_value = total_profit - travel_cost
+    
+    return objective_value, travel_time, travel_cost
+
+def solve_knapsack(route):
+    """Rozwiązuje problem plecakowy dla podanej trasy, wybierając przedmioty losowo."""
     picked_items = []
     total_profit = 0
     total_weight = 0
 
+    # Zbierz wszystkie dostępne przedmioty na trasie
+    all_items = []
     for city in route:
         for item in itemset.get(city, []):
             item_id, profit, weight = item
-            if total_weight + weight <= W:
-                picked_items.append((city, item_id))
-                total_weight += weight
-                total_profit += profit
+            all_items.append((city, item_id, profit, weight))
+    
+    # Losowo mieszamy przedmioty
+    random.shuffle(all_items)
+    
+    # Wybierz przedmioty losowo, dopóki plecak się nie zapełni
+    for city, item_id, profit, weight in all_items:
+        if total_weight + weight <= W:
+            picked_items.append((city, item_id))
+            total_weight += weight
+            total_profit += profit
 
     return picked_items, total_profit, total_weight
 
-# Random Search klasa
+# Parametry algorytmu
+good_parameters = {
+    "iterations": 10000  # Większa liczba iteracji dla lepszych wyników
+}
+
+weak_parameters = {
+    "iterations": 100  # Mniejsza liczba iteracji dla słabszych wyników
+}
+
 class RandomSearch:
-    def __init__(self, graph, itemset, W, iterations):
-        self.graph = graph
-        self.itemset = itemset
-        self.W = W
+    def __init__(self, iterations):
         self.iterations = iterations
 
     def generate_random_route(self):
-        cities = list(self.graph.keys())
+        """Generuje losową trasę, która zawiera wszystkie miasta."""
+        cities = list(graph.keys())
         random.shuffle(cities)
         return cities
 
     def run(self):
         best_route = self.generate_random_route()
-        best_picked_items, best_total_profit, best_total_weight = solve_knapsack(best_route, self.itemset, self.W)
-        best_distance = calculate_total_distance(best_route, self.graph)
+        best_picked_items, best_total_profit, best_total_weight = solve_knapsack(best_route)
+        best_objective, best_time, best_cost = calculate_objective_function(best_route, best_picked_items, best_total_profit)
+        best_distance = calculate_total_distance(best_route)
 
-        for _ in tqdm(range(self.iterations), desc="Random Search Iteracje"):
+        for _ in range(self.iterations):
             new_route = self.generate_random_route()
-            picked_items, total_profit, total_weight = solve_knapsack(new_route, self.itemset, self.W)
-            total_distance = calculate_total_distance(new_route, self.graph)
+            picked_items, total_profit, total_weight = solve_knapsack(new_route)
+            objective_value, travel_time, travel_cost = calculate_objective_function(new_route, picked_items, total_profit)
+            total_distance = calculate_total_distance(new_route)
 
-            if total_profit > best_total_profit:
+            if objective_value > best_objective:
                 best_route = new_route
+                best_objective = objective_value
                 best_picked_items = picked_items
                 best_total_profit = total_profit
                 best_total_weight = total_weight
                 best_distance = total_distance
+                best_time = travel_time
+                best_cost = travel_cost
 
-        return best_route, best_distance, best_picked_items, best_total_profit, best_total_weight
+        return best_route, best_distance, best_picked_items, best_total_profit, best_total_weight, best_time, best_cost, best_objective
+
+def print_solution(route, total_distance, picked_items, total_profit, total_weight, total_time, total_cost, objective_value):
+    print("Najkrótsza ścieżka: ", route)
+    print("Całkowita odległość: ", total_distance)
+    print("Czas podróży: {:.2f} jednostek czasu".format(total_time))
+    print("Koszt podróży: {:.2f}".format(total_cost))
+    print("Złodziej powinien zabrać następujące przedmioty:")
+    for city, item in picked_items:
+        print(f"Miasto {city}: Przedmiot {item}")
+    print("Całkowity zysk z przedmiotów: ", total_profit)
+    print("Waga przenoszona w plecaku: ", total_weight)
+    print("Wartość funkcji celu: {:.2f}".format(objective_value))
+
+# Tworzenie katalogu wynikowego
+output_dir = "tests/output/Algorytm Random Search"
+if not os.path.exists(output_dir):
+    os.makedirs(output_dir)
+    print(f"Utworzono katalog: {output_dir}")
+
+# Pliki testowe
+files = ["data/50_1.txt"]
 
 # Wyniki
 optimal_results = []
@@ -81,70 +202,152 @@ memory_results = []
 
 for file in files:
     print(f"\nPrzetwarzanie pliku: {file}")
-    graph, itemset, knapsack_capacity, _, _, _ = load_data(file)
-
-    # Optymalność rozwiązania
-    for iterations in iteration_ranges:
-        rs = RandomSearch(graph, itemset, knapsack_capacity, iterations)
+    try:
+        print("Wczytywanie danych...")
+        graph, itemset, knapsack_capacity, min_speed, max_speed, renting_ratio = load_data(file)
+        print(f"Wczytano dane: {len(graph)} miast, {sum(len(items) for items in itemset.values())} przedmiotów")
+        
+        Vmax = max_speed
+        Vmin = min_speed
+        W = knapsack_capacity
+        R = renting_ratio
+        v_w = (Vmax - Vmin) / W
+        
+        # Optymalność rozwiązania - dobre parametry
+        print("\nTestowanie optymalności rozwiązania - dobre parametry...")
+        rs = RandomSearch(**good_parameters)
+        
         start_time = time.time()
-        _, total_distance, _, total_profit, total_weight = rs.run()
+        (best_route, best_distance, best_items, best_profit, best_weight, 
+         best_time, best_cost, best_objective) = rs.run()
         execution_time = time.time() - start_time
+        
+        print(f"\nZnaleziono rozwiązanie w czasie {execution_time:.2f} sekund")
+        print(f"Wartość funkcji celu: {best_objective:.2f}")
+        print(f"Całkowity zysk: {best_profit:.2f}")
+        print(f"Całkowita waga: {best_weight:.2f}")
+        
         optimal_results.append({
             "Instancja problemu": file,
-            "Liczba iteracji": iterations,
-            "Całkowity zysk": total_profit,
-            "Całkowity dystans": total_distance,
-            "Czas wykonania (s)": execution_time,
-            "Algorytm": "Random Search"
+            "Parametry": "Dobre",
+            "Wartość funkcji celu": best_objective,
+            "Całkowity zysk": best_profit,
+            "Całkowita waga": best_weight,
+            "Długość trasy": best_distance,
+            "Czas podróży": best_time,
+            "Koszt podróży": best_cost,
+            "Czas wykonania (s)": execution_time
         })
-
+        
         # Efektywność czasowa
+        print("\nTestowanie efektywności czasowej...")
         efficiency_results.append({
             "Instancja problemu": file,
-            "Czas wykonania (s)": execution_time,
-            "Algorytm": "Random Search",
-            "Parametry": f"Liczba iteracji: {iterations}"
+            "Parametry": "Dobre",
+            "Czas wykonania (s)": execution_time
         })
 
-    # Stabilność wyników
-    for run in range(stability_runs):
-        rs = RandomSearch(graph, itemset, knapsack_capacity, 100)  # Stała liczba iteracji dla stabilności
-        _, total_distance, _, total_profit, total_weight = rs.run()
-        stability_results[file].append({
-            "Uruchomienie": run + 1,
-            "Całkowity zysk": total_profit,
-            "Całkowity dystans": total_distance,
-            "Czas wykonania (s)": execution_time,
-            "Waga przedmiotów": total_weight,
-            "Parametry": "Liczba iteracji: 100"
+        # Optymalność rozwiązania - słabe parametry
+        print("\nTestowanie optymalności rozwiązania - słabe parametry...")
+        rs = RandomSearch(**weak_parameters)
+        
+        start_time = time.time()
+        (best_route, best_distance, best_items, best_profit, best_weight, 
+         best_time, best_cost, best_objective) = rs.run()
+        execution_time = time.time() - start_time
+        
+        print(f"\nZnaleziono rozwiązanie w czasie {execution_time:.2f} sekund")
+        print(f"Wartość funkcji celu: {best_objective:.2f}")
+        print(f"Całkowity zysk: {best_profit:.2f}")
+        print(f"Całkowita waga: {best_weight:.2f}")
+        
+        optimal_results.append({
+            "Instancja problemu": file,
+            "Parametry": "Słabe",
+            "Wartość funkcji celu": best_objective,
+            "Całkowity zysk": best_profit,
+            "Całkowita waga": best_weight,
+            "Długość trasy": best_distance,
+            "Czas podróży": best_time,
+            "Koszt podróży": best_cost,
+            "Czas wykonania (s)": execution_time
         })
-
-    # Złożoność obliczeniowa (średnie zużycie pamięci)
-    tracemalloc.start()
-    rs = RandomSearch(graph, itemset, knapsack_capacity, 100)
-    rs.run()
-    _, peak_memory = tracemalloc.get_traced_memory()
-    tracemalloc.stop()
-    memory_results.append({
-        "Instancja problemu": file,
-        "Średnie zużycie pamięci (MB)": peak_memory / 10**6,
-        "Parametry": "Liczba iteracji: 100"
-    })
+        
+        
+        # Stabilność wyników
+        print("\nTestowanie stabilności wyników...")
+        for run in range(5):
+            print(f"\nUruchomienie {run+1}/5")
+            rs = RandomSearch(**good_parameters)
+            
+            start_time = time.time()
+            (best_route, best_distance, best_items, best_profit, best_weight, 
+             best_time, best_cost, best_objective) = rs.run()
+            execution_time = time.time() - start_time
+            
+            print(f"Znaleziono rozwiązanie w czasie {execution_time:.2f} sekund")
+            print(f"Wartość funkcji celu: {best_objective:.2f}")
+            
+            stability_results[file].append({
+                "Uruchomienie": run + 1,
+                "Wartość funkcji celu": best_objective,
+                "Całkowity zysk": best_profit,
+                "Całkowita waga": best_weight,
+                "Długość trasy": best_distance,
+                "Czas podróży": best_time,
+                "Koszt podróży": best_cost,
+                "Czas wykonania (s)": execution_time
+            })
+        
+        # Złożoność pamięciowa
+        print("\nTestowanie zużycia pamięci...")
+        tracemalloc.start()
+        rs = RandomSearch(**good_parameters)
+        rs.run()
+        current, peak_memory = tracemalloc.get_traced_memory()
+        tracemalloc.stop()
+        
+        print(f"Aktualne zużycie pamięci: {current / 1024:.2f} KB")
+        print(f"Szczytowe zużycie pamięci: {peak_memory / 1024:.2f} KB")
+        
+        memory_results.append({
+            "Instancja problemu": file,
+            "Parametry": "Dobre",
+            "Zużycie pamięci (KB)": peak_memory / 1024
+        })
+        
+        # Test pamięci dla słabych parametrów
+        tracemalloc.start()
+        rs = RandomSearch(**weak_parameters)
+        rs.run()
+        current, peak_memory = tracemalloc.get_traced_memory()
+        tracemalloc.stop()
+        
+        print(f"Aktualne zużycie pamięci (słabe parametry): {current / 1024:.2f} KB")
+        print(f"Szczytowe zużycie pamięci (słabe parametry): {peak_memory / 1024:.2f} KB")
+        
+        memory_results.append({
+            "Instancja problemu": file,
+            "Parametry": "Słabe",
+            "Zużycie pamięci (KB)": peak_memory / 1024
+        })
+        
+    except Exception as e:
+        print(f"Wystąpił błąd podczas przetwarzania pliku {file}:")
+        print(f"Typ błędu: {type(e).__name__}")
+        print(f"Treść błędu: {str(e)}")
+        import traceback
+        print("Pełny ślad błędu:")
+        print(traceback.format_exc())
 
 # Zapisywanie wyników
-# Optymalność rozwiązania
-optimal_df = pd.DataFrame(optimal_results)
-optimal_df.to_excel("random_search_optimal_results.xlsx", index=False)
-
-# Efektywność czasowa
-efficiency_df = pd.DataFrame(efficiency_results)
-efficiency_df.to_excel("random_search_efficiency_results.xlsx", index=False)
-
-# Stabilność wyników
+print("\nZapisywanie wyników do plików Excel...")
+pd.DataFrame(optimal_results).to_excel(f"{output_dir}/rs_optimal_results.xlsx", index=False)
+pd.DataFrame(efficiency_results).to_excel(f"{output_dir}/rs_efficiency_results.xlsx", index=False)
 for file, results in stability_results.items():
-    stability_df = pd.DataFrame(results)
-    stability_df.to_excel(f"random_search_stability_{file.split('/')[-1].split('.')[0]}.xlsx", index=False)
+    file_name = file.split('/')[-1].split('.')[0]
+    pd.DataFrame(results).to_excel(f"{output_dir}/rs_stability_{file_name}.xlsx", index=False)
+pd.DataFrame(memory_results).to_excel(f"{output_dir}/rs_memory_results.xlsx", index=False)
+print("Zapisano pliki wynikowe.")
 
-# Złożoność obliczeniowa
-memory_df = pd.DataFrame(memory_results)
-memory_df.to_excel("random_search_memory_results.xlsx", index=False)
+print("\nTestowanie zakończone!")

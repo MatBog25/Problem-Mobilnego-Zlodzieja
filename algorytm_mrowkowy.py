@@ -2,7 +2,7 @@ import random
 from common.data_loader import load_data
 
 # Wczytaj dane z pliku
-graph, itemset, knapsack_capacity, min_speed, max_speed, renting_ratio = load_data("data/280_1.txt")
+graph, itemset, knapsack_capacity, min_speed, max_speed, renting_ratio = load_data("data/50_1.txt")
 
 # Parametry problemu
 Vmax = max_speed
@@ -46,14 +46,62 @@ class Ant:
         return probabilities[-1][0]
 
     def pick_items(self, current_city):
-        """Wybiera przedmioty z bieżącego miasta zgodnie z ograniczeniami plecaka."""
+        """Wybiera przedmioty z bieżącego miasta, uwzględniając wpływ na czas podróży."""
         items = itemset.get(current_city, [])
-        # Sortuj przedmioty po zysku do wagi malejąco
-        items = sorted(items, key=lambda x: x[1] / x[2], reverse=True)
+        available_items = []
         
+        # Oblicz pozostałą odległość do przejechania
+        remaining_distance = 0
+        current_city_idx = self.route.index(current_city)
+        for i in range(current_city_idx, len(self.route) - 1):
+            current = self.route[i]
+            next_city = self.route[i + 1]
+            for dest, dist in graph[current]:
+                if dest == next_city:
+                    remaining_distance += dist
+                    break
+        
+        # Dodaj odległość powrotu do miasta początkowego
+        last_city = self.route[-1]
+        start_city = self.route[0]
+        for dest, dist in graph[last_city]:
+            if dest == start_city:
+                remaining_distance += dist
+                break
+        
+        # Oblicz efektywną wartość każdego przedmiotu
         for item_id, profit, weight in items:
+            # Oblicz wpływ przedmiotu na prędkość
+            speed_without_item = Vmax
+            speed_with_item = max(Vmin, Vmax - (self.current_weight + weight) * v_w)
+            
+            # Oblicz czas podróży bez przedmiotu i z przedmiotem
+            time_without_item = remaining_distance / speed_without_item
+            time_with_item = remaining_distance / speed_with_item
+            
+            # Oblicz dodatkowy czas
+            additional_time = time_with_item - time_without_item
+            
+            # Oblicz koszt transportu
+            transport_cost = additional_time * R
+            
+            # Oblicz efektywną wartość przedmiotu
+            effective_profit = profit - transport_cost
+            
+            # Oblicz efektywny stosunek wartości do wagi
+            effective_ratio = effective_profit / weight if weight > 0 else 0
+            
+            # Dodaj tylko przedmioty z pozytywnym wpływem na funkcję celu
+            if effective_profit > 0:
+                available_items.append((item_id, profit, weight, effective_ratio, effective_profit))
+        
+        # Sortuj przedmioty według efektywnego stosunku wartości do wagi
+        available_items.sort(key=lambda x: x[3], reverse=True)
+        
+        # Wybierz przedmioty
+        for item_id, profit, weight, _, _ in available_items:
             if self.current_weight + weight <= W:
-                self.items_picked.append((current_city, item_id))  # Zapisz miasto i przedmiot
+                self.items_picked.append((current_city, item_id))
                 self.total_profit += profit
                 self.current_weight += weight
 
@@ -205,12 +253,12 @@ def print_solution(route, total_distance, picked_items, total_profit, total_weig
     print("Wartość funkcji celu: {:.2f}".format(objective_value))
 
 # Parametry ACO
-num_ants = 100
-num_iterations = 100
+num_ants = 1000
+num_iterations = 50
 alpha = 1.0
 beta = 1.0
 evaporation_rate = 0.5
-pheromone_deposit = 10
+pheromone_deposit = 100
 
 # Uruchomienie algorytmu ACO
 aco = ACO(num_ants, num_iterations, alpha, beta, evaporation_rate, pheromone_deposit)

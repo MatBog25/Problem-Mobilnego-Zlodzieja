@@ -2,7 +2,7 @@ import random
 from common.data_loader import load_data  # Wcześniej zaimplementowana funkcja
 
 # Wczytaj dane z pliku
-graph, itemset, knapsack_capacity, min_speed, max_speed, renting_ratio = load_data("data/280_1.txt")
+graph, itemset, knapsack_capacity, min_speed, max_speed, renting_ratio = load_data("data/2000_1.txt")
 
 # Parametry problemu
 Vmax = max_speed
@@ -174,7 +174,7 @@ def print_solution(route, total_distance, picked_items, total_profit, total_weig
     print("Wartość funkcji celu: {:.2f}".format(objective_value))
 
 # Parametry optymalizacji
-rs_iterations = 100  # Liczba iteracji
+rs_iterations = 1000 # Liczba iteracji
 
 # Testowanie algorytmu Random Search
 print("Uruchamianie algorytmu losowego przeszukiwania...")

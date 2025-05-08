@@ -1,17 +1,114 @@
 import random
 import math
-from common.data_loader import load_data  # Wcześniej zaimplementowana funkcja
+import time
+from common.data_loader import load_data
 
 # Wczytaj dane z pliku
-graph, itemset, knapsack_capacity, min_speed, max_speed, renting_ratio = load_data("data/280_1.txt")
+graph, itemset, knapsack_capacity, min_speed, max_speed, renting_ratio = load_data("data/50_1.txt")
 
 # Parametry problemu
 Vmax = max_speed
 Vmin = min_speed
 W = knapsack_capacity
 R = renting_ratio
-# Obliczanie v_w - spadek prędkości w funkcji ciężaru plecaka
 v_w = (Vmax - Vmin) / W
+
+def efficient_two_opt(route):
+    """Prosta implementacja zastępcza, która zwraca trasę bez zmian."""
+    total_distance = 0
+    for i in range(len(route) - 1):
+        for dest, dist in graph[route[i]]:
+            if dest == route[i + 1]:
+                total_distance += dist
+                break
+    for dest, dist in graph[route[-1]]:
+        if dest == route[0]:
+            total_distance += dist
+            break
+    
+    return route.copy(), total_distance
+
+def smart_item_selection(route, items_by_city):
+    """Uproszczona wersja inteligentnego wyboru przedmiotów."""
+    # Tworzymy pełny cykl
+    full_cycle = route + [route[0]]
+    
+    # Obliczamy odległości między kolejnymi miastami
+    distances = []
+    total_distance = 0
+    for i in range(len(full_cycle) - 1):
+        current_city = full_cycle[i]
+        next_city = full_cycle[i + 1]
+        found = False
+        for dest, dist in graph[current_city]:
+            if dest == next_city:
+                distances.append(dist)
+                total_distance += dist
+                found = True
+                break
+        if not found:
+            distances.append(1000)
+            total_distance += 1000
+    
+    # Przygotowujemy listę dostępnych przedmiotów
+    available_items = []
+    for idx, city in enumerate(route):
+        city_items = items_by_city.get(city, [])
+        for item in city_items:
+            item_id, profit, weight = item
+            
+            # Obliczamy dystans, który przedmiot będzie musiał przebyć
+            remaining_distance = sum(distances[idx:])
+            
+            # Obliczamy wpływ przedmiotu na czas podróży
+            speed_without_item = Vmax
+            speed_with_item = max(Vmin, Vmax - weight * v_w)
+            
+            # Obliczamy czas podróży bez przedmiotu i z przedmiotem
+            time_without_item = remaining_distance / speed_without_item
+            time_with_item = remaining_distance / speed_with_item
+            
+            # Obliczenie dodatkowego czasu
+            additional_time = time_with_item - time_without_item
+            
+            # Obliczamy koszt transportu
+            transport_cost = additional_time * R
+            
+            # Efektywna wartość przedmiotu
+            effective_profit = profit - transport_cost
+            
+            # Wartość efektywna na jednostkę wagi
+            effective_ratio = effective_profit / weight if weight > 0 else 0
+            
+            # Zabezpieczenie przed ujemnymi wartościami
+            if effective_ratio < 0:
+                effective_ratio = 0
+            
+            # Zapisujemy przedmiot
+            available_items.append((city, item_id, profit, weight, effective_ratio, effective_profit))
+    
+    # Sortujemy przedmioty według ich efektywnej wartości (malejąco)
+    available_items.sort(key=lambda x: (-x[4]))
+    
+    # Wybieramy przedmioty, nie przekraczając pojemności plecaka
+    picked_items = []
+    total_weight = 0
+    total_profit = 0
+    remaining_capacity = W
+    
+    for item_data in available_items:
+        city, item_id, profit, weight, _, effective_profit = item_data
+        
+        # Sprawdź, czy przedmiot zmieści się w plecaku
+        if weight <= remaining_capacity:
+            # Bierzemy tylko przedmioty z pozytywnym wpływem na funkcję celu
+            if effective_profit > 0:
+                picked_items.append((city, item_id))
+                total_weight += weight
+                total_profit += profit
+                remaining_capacity -= weight
+    
+    return picked_items, total_weight, total_profit
 
 class Particle:
     def __init__(self, route):
@@ -19,24 +116,42 @@ class Particle:
         self.best_route = list(self.route)
         self.best_fitness, self.picked_items, self.total_weight, self.total_profit, self.travel_time, self.travel_cost = self.calculate_fitness()
         self.velocity = []
-        self.weights_at_cities = []  # Lista wag plecaka w każdym mieście
+        self.weights_at_cities = []
 
     def ensure_all_cities(self, route):
-        """Zapewnia, że trasa zawiera wszystkie miasta."""
+        """Zapewnia, że trasa zawiera wszystkie miasta dokładnie raz."""
         all_cities = set(graph.keys())
-        missing_cities = list(all_cities - set(route))
-        route += missing_cities  # Dodaj brakujące miasta
-        random.shuffle(route)  # Losowo permutuj trasę
-        return route
+        
+        # Usuń duplikaty, zachowując kolejność
+        unique_route = []
+        seen = set()
+        for city in route:
+            if city not in seen and city in all_cities:
+                seen.add(city)
+                unique_route.append(city)
+        
+        # Dodaj brakujące miasta
+        missing_cities = all_cities - seen
+        if missing_cities:
+            unique_route.extend(missing_cities)
+        
+        # Sprawdź finalną trasę
+        if len(unique_route) != len(all_cities):
+            unique_route = list(all_cities)
+            random.shuffle(unique_route)
+            
+        return unique_route
 
     def calculate_travel_time(self, weights_at_cities):
         """Oblicza czas podróży zgodnie z funkcją celu."""
         total_time = 0
         
-        # Obliczanie czasu podróży między kolejnymi miastami
-        for i in range(len(self.route) - 1):
-            current_city = self.route[i]
-            next_city = self.route[i + 1]
+        # Tworzy pełny cykl
+        full_cycle = self.route + [self.route[0]]
+        
+        for i in range(len(full_cycle) - 1):
+            current_city = full_cycle[i]
+            next_city = full_cycle[i + 1]
             
             # Znajdź odległość między miastami
             distance = 0
@@ -47,91 +162,35 @@ class Particle:
             
             # Oblicz prędkość na podstawie aktualnej wagi plecaka
             current_weight = weights_at_cities[i]
-            speed = max(Vmin, Vmax - current_weight * v_w)  # Upewnij się, że prędkość nie spadnie poniżej Vmin
+            speed = max(Vmin, Vmax - current_weight * v_w)
             
             # Dodaj czas podróży
             total_time += distance / speed
         
-        # Dodaj czas powrotu do miasta początkowego
-        last_city = self.route[-1]
-        start_city = self.route[0]
-        
-        # Znajdź odległość powrotu
-        return_distance = 0
-        for dest, dist in graph[last_city]:
-            if dest == start_city:
-                return_distance = dist
-                break
-        
-        # Oblicz prędkość na podstawie wagi plecaka po odwiedzeniu wszystkich miast
-        last_weight = weights_at_cities[-1]
-        return_speed = max(Vmin, Vmax - last_weight * v_w)  # Upewnij się, że prędkość nie spadnie poniżej Vmin
-        
-        # Dodaj czas powrotu
-        total_time += return_distance / return_speed
-        
         return total_time
 
-    def pick_items(self, current_city, current_weight, max_items=2):
-        """Wybiera przedmioty z bieżącego miasta zgodnie z ograniczeniami plecaka i stosunkiem zysku do wagi."""
-        items = itemset.get(current_city, [])
-        # Sortuj przedmioty po stosunku zysku do wagi malejąco
-        items = sorted(items, key=lambda x: x[1] / x[2], reverse=True)
-        
-        picked_items = []
-        total_profit = 0
-        total_weight = current_weight
-        
-        # Ogranicz liczbę przedmiotów, które można zabrać z każdego miasta
-        for i, (item_id, profit, weight) in enumerate(items):
-            if i >= max_items:  # Maksymalnie max_items przedmiotów z każdego miasta
-                break
-            if total_weight + weight <= W:
-                picked_items.append((current_city, item_id))
-                total_weight += weight
-                total_profit += profit
-        
-        return picked_items, total_weight, total_profit
-
     def calculate_fitness(self):
-        total_distance = 0
-        total_profit = 0
-        total_weight = 0
-        picked_items = []
-        weights_at_cities = [0]  # Początkowa waga plecaka
-
-        # Najpierw oblicz odległość całej trasy
-        for i in range(len(self.route) - 1):
-            current_city = self.route[i]
-            next_city = self.route[i + 1]
-            for dest, dist in graph[current_city]:
-                if dest == next_city:
-                    total_distance += dist
-                    break
-
-        # Dodaj dystans powrotny do miasta startowego
-        start_city = self.route[0]
-        last_city = self.route[-1]
-        for dest, dist in graph[last_city]:
-            if dest == start_city:
-                total_distance += dist
-                break
-
-        # Teraz wybierz przedmioty, uwzględniając wpływ na prędkość
-        for i, current_city in enumerate(self.route):
-            # Wybierz przedmioty z aktualnego miasta, ograniczając liczbę przedmiotów
-            city_items, new_weight, city_profit = self.pick_items(current_city, total_weight, max_items=2)
-            
-            # Dodaj wybrane przedmioty do listy
-            picked_items.extend(city_items)
-            total_profit += city_profit
-            total_weight = new_weight
-            
-            # Zapisz aktualną wagę plecaka po opuszczeniu miasta
-            weights_at_cities.append(total_weight)
-
-        # Oblicz czas podróży zgodnie z funkcją celu
-        travel_time = self.calculate_travel_time(weights_at_cities)
+        """Oblicza wartość funkcji celu."""
+        # Użyj inteligentnego wyboru przedmiotów
+        picked_items, total_weight, total_profit = smart_item_selection(self.route, itemset)
+        
+        # Obliczamy dokładne wagi plecaka w każdym mieście na trasie
+        weights_array = [0]  # Początkowa waga przed pierwszym miastem
+        current_weight = 0
+        
+        for city in self.route:
+            # Sprawdź, czy w tym mieście zostały zebrane jakieś przedmioty
+            for city_item, item_id in picked_items:
+                if city_item == city:
+                    # Znajdź wagę przedmiotu
+                    for item in itemset.get(city, []):
+                        if item[0] == item_id:
+                            current_weight += item[2]
+                            break
+            weights_array.append(current_weight)
+        
+        # Oblicz czas podróży
+        travel_time = self.calculate_travel_time(weights_array)
         
         # Oblicz koszt podróży
         travel_cost = R * travel_time
@@ -140,70 +199,104 @@ class Particle:
         fitness = total_profit - travel_cost
         
         # Zapisz wagi plecaka w każdym mieście
-        self.weights_at_cities = weights_at_cities
+        self.weights_at_cities = weights_array
         
         return fitness, picked_items, total_weight, total_profit, travel_time, travel_cost
 
-    def update_velocity(self, global_best_route, w, c1, c2):
+    def update_velocity(self, global_best_route, w, c1, c2, global_best_fitness):
+        """Aktualizuje prędkość cząstki."""
         self.velocity = []
         
-        # Dodaj więcej losowych ruchów, aby zwiększyć eksplorację
-        if random.random() < 0.5:  # 50% szans na dodanie losowego ruchu
-            # Dodaj kilka losowych zamian
-            num_swaps = random.randint(1, 3)
-            for _ in range(num_swaps):
+        # Kopiujemy obecne rozwiązanie i najlepsze rozwiązania
+        solution_gbest = list(global_best_route)
+        solution_pbest = list(self.best_route)
+        solution_current = list(self.route)
+        
+        # Określamy prawdopodobieństwa
+        alfa = c1
+        beta = c2
+        
+        # Komponenta poznawcza (pbest - current)
+        temp_pbest = list(solution_pbest)
+        for i in range(len(solution_current)):
+            if solution_current[i] != temp_pbest[i]:
+                j = temp_pbest.index(solution_current[i])
+                swap_operator = (i, j, alfa)
+                self.velocity.append(swap_operator)
+                temp_pbest[i], temp_pbest[j] = temp_pbest[j], temp_pbest[i]
+        
+        # Komponenta społeczna (gbest - current)
+        temp_gbest = list(solution_gbest)
+        for i in range(len(solution_current)):
+            if solution_current[i] != temp_gbest[i]:
+                j = temp_gbest.index(solution_current[i])
+                swap_operator = (i, j, beta)
+                self.velocity.append(swap_operator)
+                temp_gbest[i], temp_gbest[j] = temp_gbest[j], temp_gbest[i]
+        
+        # Komponent bezwładności (inercja)
+        if w > 0:
+            for _ in range(max(1, int(len(self.route) * 0.05))):
                 i = random.randint(0, len(self.route) - 1)
                 j = random.randint(0, len(self.route) - 1)
                 if i != j:
-                    self.velocity.append(('swap', i, j))
-        
-        # Dodaj ruchy w kierunku najlepszego osobistego rozwiązania
-        for i in range(len(self.route)):
-            r1 = random.random()
-            if r1 < c1 and self.route[i] in self.best_route:
-                self.velocity.append(('swap', i, self.best_route.index(self.route[i])))
-        
-        # Dodaj ruchy w kierunku globalnego najlepszego rozwiązania
-        for i in range(len(self.route)):
-            r2 = random.random()
-            if r2 < c2 and self.route[i] in global_best_route:
-                self.velocity.append(('swap', i, global_best_route.index(self.route[i])))
-        
-        # Dodaj ruchy typu "reverse" (odwrócenie fragmentu trasy)
-        if random.random() < 0.3:  # 30% szans na dodanie ruchu typu "reverse"
-            start = random.randint(0, len(self.route) - 2)
-            end = random.randint(start + 1, len(self.route) - 1)
-            self.velocity.append(('reverse', start, end))
+                    self.velocity.append(('swap', i, j, w))
 
     def update_position(self):
+        """Aktualizuje pozycję cząstki."""
+        if not self.velocity:
+            return
+            
         new_route = list(self.route)
+        all_cities = set(graph.keys())
         
-        # Zastosuj wszystkie ruchy z prędkości
-        for move in self.velocity:
-            if move[0] == 'swap':
-                i, j = move[1], move[2]
-                if i < len(new_route) and j < len(new_route):
-                    new_route[i], new_route[j] = new_route[j], new_route[i]
-            elif move[0] == 'reverse':
-                start, end = move[1], move[2]
-                if start < len(new_route) and end < len(new_route):
-                    new_route[start:end+1] = reversed(new_route[start:end+1])
+        # Stosujemy operatory zamiany
+        for operator in self.velocity:
+            if isinstance(operator, tuple) and len(operator) >= 3:
+                # Standardowy operator zamiany (i, j, prawdopodobieństwo)
+                if len(operator) == 3:
+                    i, j, probability = operator
+                    
+                    if random.random() <= probability:
+                        if 0 <= i < len(new_route) and 0 <= j < len(new_route):
+                            new_route[i], new_route[j] = new_route[j], new_route[i]
+                
+                # Specjalny operator typu (reverse, i, j, prawdopodobieństwo)
+                elif len(operator) == 4 and operator[0] == 'reverse':
+                    _, i, j, probability = operator
+                    
+                    if random.random() <= probability:
+                        if 0 <= i < len(new_route) and 0 <= j < len(new_route) and i < j:
+                            new_route[i:j+1] = reversed(new_route[i:j+1])
+                
+                # Specjalny operator typu (swap, i, j, prawdopodobieństwo)
+                elif len(operator) == 4 and operator[0] == 'swap':
+                    _, i, j, probability = operator
+                    
+                    if random.random() <= probability:
+                        if 0 <= i < len(new_route) and 0 <= j < len(new_route):
+                            new_route[i], new_route[j] = new_route[j], new_route[i]
+            
+            # Walidacja trasy po każdej operacji
+            route_cities = set(new_route)
+            if route_cities != all_cities or len(new_route) != len(all_cities):
+                new_route = self.ensure_all_cities(new_route)
         
-        # Upewnij się, że trasa zawiera wszystkie miasta
-        self.route = self.ensure_all_cities(new_route)
+        # Zapisujemy nową trasę
+        self.route = new_route
         
-        # Oblicz nową wartość funkcji celu
-        new_fitness, new_picked_items, new_total_weight, new_total_profit, new_travel_time, new_travel_cost = self.calculate_fitness()
+        # Obliczamy nową wartość funkcji celu
+        new_fitness, new_picked_items, new_weight, new_profit, new_time, new_cost = self.calculate_fitness()
         
-        # Aktualizuj najlepsze rozwiązanie, jeśli nowe jest lepsze
+        # Aktualizujemy najlepsze rozwiązanie, jeśli nowe jest lepsze
         if new_fitness > self.best_fitness:
             self.best_fitness = new_fitness
             self.best_route = list(self.route)
             self.picked_items = new_picked_items
-            self.total_weight = new_total_weight
-            self.total_profit = new_total_profit
-            self.travel_time = new_travel_time
-            self.travel_cost = new_travel_cost
+            self.total_weight = new_weight
+            self.total_profit = new_profit
+            self.travel_time = new_time
+            self.travel_cost = new_cost
 
 class PSO:
     def __init__(self, num_particles, w, c1, c2, num_iterations):
@@ -213,22 +306,79 @@ class PSO:
         self.c2 = c2
         self.num_iterations = num_iterations
         self.particles = []
-        self.no_improvement_count = 0
         self.best_fitness_history = []
-
-        # Inicjalizacja cząstek z różnymi strategiami
-        for _ in range(num_particles):
-            if _ < num_particles // 3:
-                # 1/3 cząstek z trasą opartą na odległości
+        self.stagnation_count = 0
+        self.last_best_fitness = float('-inf')
+        
+        # Inicjalizacja cząstek
+        print(f"Inicjalizacja {num_particles} cząstek...")
+        all_cities = list(graph.keys())
+        
+        initial_routes = []
+        
+        # Generujemy więcej różnorodnych tras niż potrzebujemy
+        print("Generowanie różnorodnych tras początkowych...")
+        for i in range(num_particles // 3 * 5):  # Generujemy więcej, żeby wybrać najlepsze
+            method = i % 5  # 5 różnych metod generowania tras
+            if method == 0:
+                # Trasa oparta na odległości
                 route = self.generate_distance_based_route()
-            elif _ < 2 * num_particles // 3:
-                # 1/3 cząstek z trasą opartą na wartości przedmiotów
+            elif method == 1:
+                # Trasa oparta na wartości przedmiotów
                 route = self.generate_value_based_route()
+            elif method == 2:
+                # Trasa oparta na kombinacji odległości i wartości
+                route = self.generate_hybrid_route()
+            elif method == 3:
+                # Trasa oparta na losowym insercie
+                route = self.generate_insertion_route()
             else:
-                # 1/3 cząstek z losową trasą
+                # Całkowicie losowa trasa
                 route = self.generate_random_route()
+                
+            # Dodajemy małą losowość do każdej trasy (2-opt)
+            num_swaps = max(2, int(len(route) * 0.05))  # 5% zamian
+            for _ in range(num_swaps):
+                i = random.randint(0, len(route) - 1)
+                j = random.randint(0, len(route) - 1)
+                if i != j:
+                    route[i], route[j] = route[j], route[i]
+                    
+            initial_routes.append(route)
             
-            self.particles.append(Particle(route))
+        # Tworzymy cząstki i oceniamy je
+        print("Tworzenie cząstek i ocena początkowej populacji...")
+        temp_particles = [Particle(route) for route in initial_routes]
+        
+        # Sortujemy według fitness i bierzemy najlepsze
+        temp_particles.sort(key=lambda p: p.best_fitness, reverse=True)
+        self.particles = temp_particles[:num_particles]
+        
+        # Zapewniamy różnorodność - sprawdzamy pary tras i upewniamy się,
+        # że nie są zbyt podobne (oceniamy przez odległość Hamminga)
+        distinct_particles = []
+        
+        for p in self.particles:
+            is_distinct = True
+            for dp in distinct_particles:
+                # Obliczamy odległość Hamminga (liczbę różnic)
+                hamming_distance = sum(1 for a, b in zip(p.route, dp.route) if a != b)
+                if hamming_distance < len(p.route) * 0.1:  # Jeśli różnią się mniej niż 10%
+                    is_distinct = False
+                    break
+                
+            if is_distinct or len(distinct_particles) < num_particles * 0.5:
+                distinct_particles.append(p)
+                
+            if len(distinct_particles) >= num_particles:
+                break
+        
+        # Jeśli nie znaleźliśmy wystarczająco różnych, uzupełniamy losowymi
+        while len(distinct_particles) < num_particles:
+            route = self.generate_random_route()
+            distinct_particles.append(Particle(route))
+        
+        self.particles = distinct_particles
 
         # Znajdź najlepszą cząstkę
         best_particle = max(self.particles, key=lambda p: p.best_fitness)
@@ -242,67 +392,226 @@ class PSO:
         
         # Zapisz początkową wartość funkcji celu
         self.best_fitness_history.append(self.global_best_fitness)
+        
+        # Raportuj początkową długość trasy
+        initial_distance = calculate_total_distance(self.global_best_route)
+        print(f"Początkowa długość najlepszej trasy: {initial_distance:.2f}, fitness: {self.global_best_fitness:.2f}")
 
     def generate_random_route(self):
         """Generuje losową trasę."""
         cities = list(graph.keys())
         random.shuffle(cities)
         return cities
-
+        
     def generate_distance_based_route(self):
         """Generuje trasę opartą na odległości między miastami."""
         cities = list(graph.keys())
-        route = [random.choice(cities)]
-        unvisited = set(cities) - {route[0]}
+        start_city = random.choice(cities)
+        route = [start_city]
+        unvisited = set(cities) - {start_city}
         
         while unvisited:
             current = route[-1]
-            # Znajdź najbliższe nieodwiedzone miasto
-            next_city = min(unvisited, key=lambda c: next(dist for dest, dist in graph[current] if dest == c))
-            route.append(next_city)
-            unvisited.remove(next_city)
+            next_cities = []
+            
+            for city in unvisited:
+                distance = float('inf')
+                for dest, dist in graph[current]:
+                    if dest == city:
+                        distance = dist
+                        break
+                next_cities.append((city, distance))
+            
+            next_cities.sort(key=lambda x: x[1])
+            
+            if next_cities:
+                if random.random() < 0.9:  # 90% szans na wybór najbliższego miasta
+                    top_n = min(3, len(next_cities))
+                    next_city = next_cities[random.randint(0, top_n-1)][0]
+                else:
+                    next_city = random.choice(next_cities)[0]
+                
+                route.append(next_city)
+                unvisited.remove(next_city)
+            else:
+                break
         
         return route
-
+    
     def generate_value_based_route(self):
         """Generuje trasę opartą na wartości przedmiotów w miastach."""
-        # Oblicz średnią wartość przedmiotów w każdym mieście
         city_values = {}
         for city, items in itemset.items():
             if items:
-                total_value = sum(item[1] for item in items)  # item[1] to wartość przedmiotu
+                total_value = sum(item[1] for item in items)
                 city_values[city] = total_value / len(items)
             else:
                 city_values[city] = 0
         
-        # Sortuj miasta według wartości przedmiotów
-        sorted_cities = sorted(city_values.keys(), key=lambda c: city_values[c], reverse=True)
+        all_cities = set(graph.keys())
+        for city in all_cities:
+            if city not in city_values:
+                city_values[city] = 0
         
-        # Dodaj losowość do trasy
-        route = list(sorted_cities)
-        random.shuffle(route)
+        # Posortuj miasta według wartości przedmiotów
+        city_value_pairs = [(city, city_values[city]) for city in all_cities]
+        
+        # Strategia 1: Najpierw miasta z najcenniejszymi przedmiotami
+        if random.random() < 0.5:
+            city_value_pairs.sort(key=lambda x: x[1], reverse=True)
+        # Strategia 2: Najpierw miasta z najmniej cennymi przedmiotami
+        else:
+            city_value_pairs.sort(key=lambda x: x[1])
+        
+        route = [pair[0] for pair in city_value_pairs]
+        
+        # Dodaj losowość - odwróć losowy segment trasy
+        if len(route) > 3:
+            i = random.randint(0, len(route) - 3)
+            j = random.randint(i + 1, len(route) - 1)
+            route[i:j+1] = reversed(route[i:j+1])
+        
+        return route
+        
+    def generate_hybrid_route(self):
+        """Generuje trasę opartą na kombinacji odległości i wartości przedmiotów."""
+        # Podobnie jak najbliższy sąsiad, ale bierzemy pod uwagę również wartość przedmiotów
+        cities = list(graph.keys())
+        start_city = random.choice(cities)
+        route = [start_city]
+        unvisited = set(cities) - {start_city}
+        
+        # Współczynnik balansu między odległością a wartością przedmiotów (0-1)
+        # 0 - tylko odległość, 1 - tylko wartość przedmiotów
+        balance = random.random()
+        
+        # Słownik wartości przedmiotów w miastach
+        city_values = {}
+        for city, items in itemset.items():
+            if items:
+                total_value = sum(item[1] for item in items)
+                city_values[city] = total_value / len(items)
+            else:
+                city_values[city] = 0
+        
+        for city in unvisited:
+            if city not in city_values:
+                city_values[city] = 0
+        
+        # Znormalizuj wartości
+        max_value = max(city_values.values()) if city_values else 1
+        if max_value > 0:
+            for city in city_values:
+                city_values[city] /= max_value
+        
+        while unvisited:
+            current = route[-1]
+            next_cities = []
+            
+            for city in unvisited:
+                # Składnik odległości
+                distance = float('inf')
+                for dest, dist in graph[current]:
+                    if dest == city:
+                        distance = dist
+                        break
+                
+                # Składnik wartości przedmiotów
+                value = city_values.get(city, 0)
+                
+                # Normalizacja odległości (mniejsza = lepsza)
+                max_distance = 10000  # Przybliżona maksymalna odległość
+                norm_distance = 1 - min(distance / max_distance, 1)
+                
+                # Połączona metryka - wyższa wartość = lepsze miasto
+                combined_metric = (1 - balance) * norm_distance + balance * value
+                
+                next_cities.append((city, combined_metric))
+            
+            next_cities.sort(key=lambda x: x[1], reverse=True)
+            
+            if next_cities:
+                # Wybierz jedno z najlepszych miast
+                top_n = min(3, len(next_cities))
+                next_city = next_cities[random.randint(0, top_n-1)][0]
+                
+                route.append(next_city)
+                unvisited.remove(next_city)
+            else:
+                break
+        
+        return route
+        
+    def generate_insertion_route(self):
+        """Generuje trasę z użyciem metody losowego wstawiania."""
+        cities = list(graph.keys())
+        
+        # Wybierz 3 losowe miasta jako początek
+        if len(cities) >= 3:
+            initial_cities = random.sample(cities, 3)
+            route = initial_cities
+            unvisited = set(cities) - set(initial_cities)
+        else:
+            route = cities.copy()
+            unvisited = set()
+        
+        # Wstawiaj pozostałe miasta w losowych miejscach
+        while unvisited:
+            city = random.choice(list(unvisited))
+            
+            # Znajdź najlepsze miejsce do wstawienia
+            best_position = 0
+            best_increase = float('inf')
+            
+            for i in range(len(route)):
+                # Oblicz wzrost długości trasy po wstawieniu miasta w pozycji i
+                prev_city = route[i-1] if i > 0 else route[-1]
+                next_city = route[i]
+                
+                # Znajdź odległości
+                dist_prev_to_city = float('inf')
+                for dest, dist in graph[prev_city]:
+                    if dest == city:
+                        dist_prev_to_city = dist
+                        break
+                        
+                dist_city_to_next = float('inf')
+                for dest, dist in graph[city]:
+                    if dest == next_city:
+                        dist_city_to_next = dist
+                        break
+                        
+                dist_prev_to_next = float('inf')
+                for dest, dist in graph[prev_city]:
+                    if dest == next_city:
+                        dist_prev_to_next = dist
+                        break
+                
+                # Oblicz wzrost długości trasy
+                increase = dist_prev_to_city + dist_city_to_next - dist_prev_to_next
+                
+                if increase < best_increase:
+                    best_increase = increase
+                    best_position = i
+            
+            # Wstaw miasto w najlepszej pozycji
+            route.insert(best_position, city)
+            unvisited.remove(city)
         
         return route
 
     def run(self):
+        """Główna pętla algorytmu PSO."""
+        last_improvement_iteration = 0
+        best_route_distance = float('inf')
+        
         for iteration in range(self.num_iterations):
-            # Aktualizacja parametrów w czasie
-            current_w = self.w * (1 - iteration / self.num_iterations)  # Zmniejsz wagę bezwładności w czasie
-            current_c1 = self.c1 * (1 - iteration / self.num_iterations)  # Zmniejsz składnik poznawczy w czasie
-            current_c2 = self.c2 * (1 + iteration / self.num_iterations)  # Zwiększ składnik społeczny w czasie
-            
-            # Zastosuj lokalne wyszukiwanie do najlepszych cząstek
-            if iteration % 5 == 0:  # Co 5 iteracji
-                # Sortuj cząstki według wartości funkcji celu
-                sorted_particles = sorted(self.particles, key=lambda p: p.best_fitness, reverse=True)
-                # Zastosuj lokalne wyszukiwanie do najlepszych 10% cząstek
-                for i in range(min(10, len(sorted_particles) // 10)):
-                    self.local_search(sorted_particles[i])
-            
             # Aktualizuj pozycje wszystkich cząstek
             for particle in self.particles:
-                particle.update_velocity(self.global_best_route, current_w, current_c1, current_c2)
+                particle.update_velocity(self.global_best_route, self.w, self.c1, self.c2, self.global_best_fitness)
                 particle.update_position()
+                
+                # Sprawdź, czy znaleziono lepsze globalne rozwiązanie
                 if particle.best_fitness > self.global_best_fitness:
                     self.global_best_fitness = particle.best_fitness
                     self.global_best_route = particle.best_route
@@ -311,88 +620,37 @@ class PSO:
                     self.global_best_profit = particle.total_profit
                     self.global_best_time = particle.travel_time
                     self.global_best_cost = particle.travel_cost
-                    self.no_improvement_count = 0
-                else:
-                    self.no_improvement_count += 1
+                    last_improvement_iteration = iteration
+                    self.stagnation_count = 0
+                    
+                    # Sprawdź, czy poprawiono również trasę
+                    current_route_distance = calculate_total_distance(particle.best_route)
+                    if current_route_distance < best_route_distance:
+                        best_route_distance = current_route_distance
+                        print(f"Znaleziono lepszą trasę, odległość: {best_route_distance:.2f}, funkcja celu: {self.global_best_fitness:.2f}")
+            
+            # Sprawdź, czy nastąpiła poprawa
+            if self.global_best_fitness > self.last_best_fitness:
+                self.last_best_fitness = self.global_best_fitness
+                self.stagnation_count = 0
+            else:
+                self.stagnation_count += 1
             
             # Zapisz wartość funkcji celu
             self.best_fitness_history.append(self.global_best_fitness)
             
             # Wyświetl postęp co 10 iteracji
             if (iteration + 1) % 10 == 0:
-                print(f"Iteracja {iteration + 1}/{self.num_iterations}, Najlepsza wartość funkcji celu: {self.global_best_fitness:.2f}")
+                current_distance = calculate_total_distance(self.global_best_route)
+                print(f"Iteracja {iteration + 1}/{self.num_iterations}, Wartość F.C.: {self.global_best_fitness:.2f}, Długość trasy: {current_distance:.2f}")
             
-            # Jeśli nie ma poprawy przez 20 iteracji, zresetuj część cząstek
-            if self.no_improvement_count > 20:
-                print("Brak poprawy przez 20 iteracji, resetuję część cząstek...")
-                self.reset_particles()
-                self.no_improvement_count = 0
-            
-            # Jeśli znaleźliśmy rozwiązanie z dodatnią wartością funkcji celu, możemy zakończyć wcześniej
-            if self.global_best_fitness > 0 and iteration > 50:
-                print(f"Znaleziono rozwiązanie z dodatnią wartością funkcji celu: {self.global_best_fitness:.2f}")
+            # Sprawdzenie warunku zakończenia
+            if iteration - last_improvement_iteration > 100:
+                print(f"Brak poprawy wartości funkcji celu przez {iteration - last_improvement_iteration} iteracji.")
                 break
-
+        
         return (self.global_best_route, self.global_best_fitness, self.global_best_items, 
                 self.global_best_weight, self.global_best_profit, self.global_best_time, self.global_best_cost)
-    
-    def local_search(self, particle):
-        """Zastosuj lokalne wyszukiwanie do cząstki."""
-        improved = True
-        while improved:
-            improved = False
-            # Próbuj zamienić każde miasto z każdym innym
-            for i in range(len(particle.route)):
-                for j in range(i + 1, len(particle.route)):
-                    # Zapisz oryginalną trasę
-                    original_route = list(particle.route)
-                    # Zamień miasta
-                    particle.route[i], particle.route[j] = particle.route[j], particle.route[i]
-                    # Oblicz nową wartość funkcji celu
-                    new_fitness, new_picked_items, new_total_weight, new_total_profit, new_travel_time, new_travel_cost = particle.calculate_fitness()
-                    # Jeśli nowa wartość jest lepsza, zaakceptuj zmianę
-                    if new_fitness > particle.best_fitness:
-                        particle.best_fitness = new_fitness
-                        particle.best_route = list(particle.route)
-                        particle.picked_items = new_picked_items
-                        particle.total_weight = new_total_weight
-                        particle.total_profit = new_total_profit
-                        particle.travel_time = new_travel_time
-                        particle.travel_cost = new_travel_cost
-                        improved = True
-                    else:
-                        # W przeciwnym razie przywróć oryginalną trasę
-                        particle.route = original_route
-    
-    def reset_particles(self):
-        """Resetuje część cząstek, aby uniknąć lokalnych minimów."""
-        # Sortuj cząstki według wartości funkcji celu
-        sorted_particles = sorted(self.particles, key=lambda p: p.best_fitness, reverse=True)
-        
-        # Zachowaj najlepsze 20% cząstek
-        keep_count = max(1, len(sorted_particles) // 5)
-        
-        # Resetuj pozostałe cząstki
-        for i in range(keep_count, len(sorted_particles)):
-            if i < len(sorted_particles) // 2:
-                # 50% resetowanych cząstek z trasą opartą na odległości
-                route = self.generate_distance_based_route()
-            else:
-                # 50% resetowanych cząstek z trasą opartą na wartości przedmiotów
-                route = self.generate_value_based_route()
-            
-            # Zastąp cząstkę nową
-            self.particles[i] = Particle(route)
-            
-            # Aktualizuj globalne najlepsze rozwiązanie, jeśli nowa cząstka jest lepsza
-            if self.particles[i].best_fitness > self.global_best_fitness:
-                self.global_best_fitness = self.particles[i].best_fitness
-                self.global_best_route = self.particles[i].best_route
-                self.global_best_items = self.particles[i].picked_items
-                self.global_best_weight = self.particles[i].total_weight
-                self.global_best_profit = self.particles[i].total_profit
-                self.global_best_time = self.particles[i].travel_time
-                self.global_best_cost = self.particles[i].travel_cost
 
 def calculate_total_distance(route):
     """Oblicza całkowitą odległość dla podanej trasy."""
@@ -410,6 +668,7 @@ def calculate_total_distance(route):
     return total_distance
 
 def print_solution(route, total_distance, picked_items, total_profit, total_weight, total_time, travel_cost, objective_value):
+    """Wypisuje znalezione rozwiązanie."""
     print("Najkrótsza ścieżka: ", route)
     print("Całkowita odległość: ", total_distance)
     print("Czas podróży: {:.2f} jednostek czasu".format(total_time))
@@ -421,18 +680,26 @@ def print_solution(route, total_distance, picked_items, total_profit, total_weig
     print("Waga przenoszona w plecaku: ", total_weight)
     print("Wartość funkcji celu: {:.2f}".format(objective_value))
 
-# Parametry PSO dla dużego problemu
-num_particles = 10  # Liczba cząstek
+# Parametry PSO
+num_particles = 100
 w = 0.7  # Waga bezwładności
-c1 = 2.0  # Składnik poznawczy
-c2 = 2.0  # Składnik społeczny
-num_iterations = 400  # Liczba iteracji
+c1 = 2  # Składnik poznawczy
+c2 = 2  # Składnik społeczny
+num_iterations = 200
 
-# Testowanie algorytmu PSO
-print("Uruchamianie algorytmu PSO...")
-pso = PSO(num_particles, w, c1, c2, num_iterations)
-(best_route_pso, best_fitness_pso, best_items_pso, 
- total_weight_pso, total_profit_pso, total_time_pso, travel_cost_pso) = pso.run()
+# Główna funkcja programu
+def main():
+    print(f"Uruchamianie algorytmu dla problemu TTP")
+    
+    # Inicjalizacja i uruchomienie PSO
+    pso = PSO(num_particles, w, c1, c2, num_iterations)
+    (best_route, best_fitness, best_items, total_weight, total_profit, total_time, travel_cost) = pso.run()
 
-total_distance_pso = calculate_total_distance(best_route_pso)
-print_solution(best_route_pso, total_distance_pso, best_items_pso, total_profit_pso, total_weight_pso, total_time_pso, travel_cost_pso, best_fitness_pso)
+    # Wypisz wyniki
+    total_distance = calculate_total_distance(best_route)
+    print("\nNajlepsze znalezione rozwiązanie:")
+    print_solution(best_route, total_distance, best_items, total_profit, total_weight, total_time, travel_cost, best_fitness)
+
+# Uruchomienie programu
+if __name__ == "__main__":
+    main()

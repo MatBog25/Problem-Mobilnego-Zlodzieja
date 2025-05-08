@@ -62,5 +62,6 @@ def visualize_route(file_path, route, title="Wybrana trasa"):
 
 # Przykład użycia
 file_path = "data/50_1.txt"  # Plik z danymi o miastach
-route =[29, 32, 2, 40, 12, 26, 49, 4, 20, 46, 14, 28, 17, 16, 34, 1, 5, 42, 9, 3, 18, 35, 15, 30, 23, 33, 48, 10, 22, 13, 37, 24, 36, 44, 6, 50, 8, 31, 27, 11, 43, 19, 38, 25, 7, 41, 45, 21, 47, 39]
+route = [3, 25, 38, 19, 43, 11, 40, 29, 32, 45, 41, 7, 30, 33, 23, 48, 10, 13, 22, 37, 24, 31, 4, 49, 18, 35, 15, 1, 5, 2, 34, 16, 21, 47, 39, 26, 12, 17, 
+28, 14, 46, 20, 8, 50, 6, 44, 36, 27, 9, 42]
 visualize_route(file_path, route, title="Najlepsza trasa")

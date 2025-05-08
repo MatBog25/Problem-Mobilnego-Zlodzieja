@@ -3,7 +3,7 @@ import random
 import math
 
 # Wczytaj dane z pliku za pomocą funkcji load_data, która zwraca graf, przedmioty, i parametry problemu
-graph, itemset, knapsack_capacity, min_speed, max_speed, renting_ratio = load_data("data/280_1.txt")
+graph, itemset, knapsack_capacity, min_speed, max_speed, renting_ratio = load_data("data/50_1.txt")
 
 # Parametry problemu
 Vmax = max_speed

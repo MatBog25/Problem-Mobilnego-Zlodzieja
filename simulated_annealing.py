@@ -263,7 +263,7 @@ def generate_random_route():
     return route
 
 # Parametry optymalizacji - dostosowane do szybszego wykonania
-initial_temperature = 1000000  # Zmniejszona temperatura początkowa
+initial_temperature = 100000000  # Zmniejszona temperatura początkowa
 cooling_rate = 0.99995  # Zwiększony współczynnik chłodzenia
 stopping_temperature = 0.1
 stopping_iter = 1000000  # Zmniejszona liczba iteracji
