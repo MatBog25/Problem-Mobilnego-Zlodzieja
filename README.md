@@ -277,7 +277,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 If you use this code in your research, please cite:
 
 ```
-@misc{ttp_metaheuristics_2024,
+@misc{ttp_heuristics_2025,
   title={Traveling Thief Problem: Heuristic Algorithms Comparison},
   author={[Mateusz Boguszewski]},
   year={2025},
